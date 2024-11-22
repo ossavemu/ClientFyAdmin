@@ -33,8 +33,6 @@ export async function createEvent(
   eventName,
   description,
   date,
-  // eslint-disable-next-line no-unused-vars
-  clientEmail = devEmail,
   duration = standardDuration
 ) {
   try {
