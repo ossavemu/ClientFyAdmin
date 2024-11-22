@@ -1,48 +1,136 @@
-# Astro Starter Kit: Basics
+# ClientFy - Bot de WhatsApp para Agendamiento
 
-```sh
-npm create astro@latest -- --template basics
+Bot inteligente de WhatsApp que permite agendar citas de manera conversacional, con soporte para mensajes de texto y notas de voz.
+
+## 🚀 Características
+
+- **Interacción Natural**: Procesamiento de lenguaje natural para entender solicitudes de agenda
+- **Soporte Multi-formato**:
+  - Mensajes de texto
+  - Notas de voz
+  - Selección numérica o textual de horarios
+- **Gestión Inteligente de Agenda**:
+  - Verificación de disponibilidad en tiempo real
+  - Sugerencia de horarios alternativos
+  - Confirmación de citas
+- **Integración con Servicios**:
+  - Google Calendar
+  - Zoom (generación automática de enlaces)
+  - Email (confirmaciones y recordatorios)
+- **Base de Datos**:
+  - Registro de usuarios
+  - Historial de interacciones
+  - Sistema de usuarios frecuentes
+  - Registro de agendas
+
+## 📋 Requisitos Previos
+
+- Node.js v18 o superior
+- pnpm
+- PostgreSQL (Neon DB)
+- Cuenta de Google Cloud (para Calendar y Gmail)
+- Cuenta de Zoom
+- Cuenta de OpenAI
+- WhatsApp Business API o Baileys
+
+## 🛠️ Configuración
+
+1. Clonar el repositorio:
+
+```bash
+git clone [url-del-repositorio]
+cd ClientFyAdmin
 ```
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/withastro/astro/tree/latest/examples/basics)
-[![Open with CodeSandbox](https://assets.codesandbox.io/github/button-edit-lime.svg)](https://codesandbox.io/p/sandbox/github/withastro/astro/tree/latest/examples/basics)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/withastro/astro?devcontainer_path=.devcontainer/basics/devcontainer.json)
+2. Instalar dependencias:
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
-
-![just-the-basics](https://github.com/withastro/astro/assets/2244813/a0a5533c-a856-4198-8470-2d67b1d7c554)
-
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src/
-│   ├── layouts/
-│   │   └── Layout.astro
-│   └── pages/
-│       └── index.astro
-└── package.json
+```bash
+pnpm install
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+3. Configurar variables de entorno:
 
-## 🧞 Commands
+```bash
+cp .env.example .env
+```
 
-All commands are run from the root of the project, from a terminal:
+4. Configurar las siguientes variables en el archivo `.env`:
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+```env
+DATABASE_URL=
+GMAIL_USER=
+GMAIL_APP_PASSWORD=
+ZOOM_ACCOUNT_ID=
+ZOOM_CLIENT_ID=
+ZOOM_CLIENT_SECRET=
+OPENAI_API_KEY=
+```
 
-## 👀 Want to learn more?
+5. Ejecutar migraciones:
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+```bash
+pnpm run migrate
+```
+
+## 🚀 Ejecución
+
+Desarrollo:
+
+```bash
+pnpm run dev-bot
+```
+
+## 📚 Estructura del Proyecto
+
+```
+/src
+  /config         # Configuraciones
+  /database      # Conexión y migraciones DB
+  /schemas       # Schemas de validación (Zod)
+  /services      # Servicios externos
+  /templates     # Flujos de conversación
+  /utils         # Utilidades
+```
+
+## 🔄 Flujos Principales
+
+1. **Bienvenida y Detección de Intención**
+
+   - Procesamiento de mensaje inicial
+   - Detección de usuarios frecuentes
+   - Identificación de intención de agenda
+
+2. **Proceso de Agenda**
+
+   - Mostrar slots disponibles
+   - Procesamiento de selección (texto/voz)
+   - Confirmación de horario
+   - Recolección de datos (nombre, email)
+
+3. **Confirmación**
+   - Creación de evento en Calendar
+   - Generación de link de Zoom
+   - Envío de emails de confirmación
+   - Registro en base de datos
+
+## 🤝 Contribución
+
+1. Fork el proyecto
+2. Crear rama de feature (`git checkout -b feature/AmazingFeature`)
+3. Commit cambios (`git commit -m 'Add: nueva característica'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abrir Pull Request
+
+## 📝 Licencia
+
+Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE.md](LICENSE.md) para detalles
+
+## 👥 Autores
+
+- **Tu Nombre** - _Trabajo Inicial_ - [TuUsuario](https://github.com/TuUsuario)
+
+## 🙏 Agradecimientos
+
+- BuilderBot por el framework de bot
+- OpenAI por el procesamiento de lenguaje natural
+- Neon DB por el hosting de PostgreSQL
