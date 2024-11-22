@@ -3,24 +3,18 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "dev": " astro dev",
     "lint": "eslint . --no-ignore",
-    "dev-bot": "pnpm run lint && nodemon ./src/app.js",
-    "build": "astro check && astro build",
-    "preview": "astro preview",
-    "astro": "astro",
+    "dev": "pnpm run lint && nodemon ./src/app.js",
     "migrate": "node src/database/migrations/runMigrations.js",
     "migrate:down": "node -e 'require(\"./src/database/migrations/001_initial_schema.js\").down()'"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
-    "@astrojs/check": "0.9.4",
     "@builderbot/bot": "1.2.2",
     "@builderbot/provider-baileys": "1.2.2",
     "@builderbot/provider-meta": "1.2.2",
     "@ffmpeg-installer/ffmpeg": "1.1.0",
     "@neondatabase/serverless": "^0.10.3",
-    "astro": "5.0.0-beta.8",
     "base-64": "^1.0.0",
     "dotenv": "16.4.5",
     "email-validator": "2.0.4",
@@ -38,11 +32,10 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@astrojs/vercel": "7.8.2",
-    "eslint-plugin-astro": "^1.3.1",
+    "eslint": "^9.15.0",
     "eslint-plugin-builderbot": "latest",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.7"
   },
   "trustedDependencies": [
     "protobufjs"
