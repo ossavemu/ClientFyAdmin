@@ -2,8 +2,8 @@ import { addKeyword, EVENTS } from '@builderbot/bot';
 import { createEvent } from '../services/calendar.js';
 import { emailInvite } from '../services/email.js';
 import { typing } from '../services/typing.js';
-import { zoomInviteLink } from '../services/zoom.js';
 import { wsUserService } from '../services/wsUserService.js';
+import { zoomInviteLink } from '../services/zoom.js';
 
 export const eventCreationFlow = addKeyword(EVENTS.ACTION).addAnswer(
   'Agendando la reunión...',
@@ -11,6 +11,8 @@ export const eventCreationFlow = addKeyword(EVENTS.ACTION).addAnswer(
   async (ctx, ctxFn) => {
     try {
       const userInfo = await ctxFn.state.getMyState();
+      console.log('Estado actual:', userInfo);
+
       const name = userInfo.name;
       const clientEmail = userInfo.email;
       const date = userInfo.date;
@@ -22,9 +24,9 @@ export const eventCreationFlow = addKeyword(EVENTS.ACTION).addAnswer(
 
       const description = `${name} te invitó a una reunión. Link de zoom: ${
         zoomLink ?? ''
-      }`;
+      } el usuario es ${clientEmail}`;
 
-      const eventId = await createEvent(name, description, date, clientEmail);
+      const eventId = await createEvent(name, description, date);
 
       if (eventId) {
         await wsUserService.createAgenda(
@@ -48,7 +50,6 @@ export const eventCreationFlow = addKeyword(EVENTS.ACTION).addAnswer(
         );
       }
     } catch (error) {
-      console.error('Error en eventCreationFlow:', error);
       await typing(1, { ctx, ctxFn });
       return ctxFn.endFlow(
         'Hubo un error al agendar la reunión. Por favor, intenta nuevamente.'

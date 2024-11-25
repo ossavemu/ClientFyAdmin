@@ -1,6 +1,6 @@
 import { db } from '../database/connection.js';
-import { wsUserSchema, historicSchema } from '../schemas/wsUser.js';
 import { agendaSchema } from '../schemas/agenda.js';
+import { historicSchema, wsUserSchema } from '../schemas/wsUser.js';
 
 export const wsUserService = {
   async createOrUpdateUser(phoneNumber, name) {
@@ -115,6 +115,39 @@ export const wsUserService = {
       return result[0];
     } catch (error) {
       console.error('Error in updateAgendaStatus:', error);
+      throw error;
+    }
+  },
+
+  async getUpcomingAppointments() {
+    try {
+      // Obtener citas para las próximas 24 horas
+      const result = await db.sql`
+        SELECT * FROM agenda 
+        WHERE scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
+        AND status = 'scheduled'
+        ORDER BY scheduled_at ASC
+      `;
+      return result;
+    } catch (error) {
+      console.error('Error in getUpcomingAppointments:', error);
+      throw error;
+    }
+  },
+
+  async updateAppointmentStatus(phoneNumber, scheduledAt, status) {
+    try {
+      const result = await db.sql`
+        UPDATE agenda 
+        SET status = ${status}
+        WHERE phone_number = ${phoneNumber}
+        AND scheduled_at = ${scheduledAt}
+        AND status = 'scheduled'
+        RETURNING *
+      `;
+      return result[0];
+    } catch (error) {
+      console.error('Error in updateAppointmentStatus:', error);
       throw error;
     }
   },
