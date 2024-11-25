@@ -27,8 +27,6 @@ const standardDuration = 1;
 
 const dateLimit = 30;
 
-const devEmail = 'oskarpc98@gmail.com';
-
 export async function createEvent(
   eventName,
   description,
@@ -40,19 +38,29 @@ export async function createEvent(
 
     google.options({ auth: authClient });
 
-    const startDateTime = new Date(date);
-    const endDateTime = new Date(startDateTime);
-    endDateTime.setHours(startDateTime.getHours() + duration);
+    console.log('Input date:', date);
+    console.log('Input duration:', duration);
+
+    const startDate = new Date(date);
+    console.log('Start date object:', startDate);
+    console.log('Start date hours:', startDate.getHours());
+    console.log('Start date ISO:', startDate.toISOString());
+
+    const endDate = new Date(startDate);
+    endDate.setHours(startDate.getHours() + duration);
+    console.log('End date object:', endDate);
+    console.log('End date hours:', endDate.getHours());
+    console.log('End date ISO:', endDate.toISOString());
 
     const event = {
       summary: eventName,
       description: description,
       start: {
-        dateTime: startDateTime.toISOString(),
+        dateTime: startDate.toISOString(),
         timeZone: timeZone,
       },
       end: {
-        dateTime: endDateTime.toISOString(),
+        dateTime: endDate.toISOString(),
         timeZone: timeZone,
       },
       colorId: '2',
