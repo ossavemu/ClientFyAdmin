@@ -20,7 +20,7 @@ RUN apk add --no-cache --virtual .gyp \
     && pnpm install \
     && apk del .gyp
 
-# Copiar código fuente y archivos de configuración
+# Copiar código fuente
 COPY . .
 
 # Production stage
@@ -43,9 +43,15 @@ COPY --from=builder /app/calendar-prompt.txt ./
 COPY --from=builder /app/prompt.txt ./
 COPY --from=builder /app/.env ./
 
-# Configurar variables de entorno
+# Configurar variables de entorno para reducir logs
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV NODE_OPTIONS="--no-warnings --no-deprecation"
+ENV DEBUG=false
+ENV SUPPRESS_NO_CONFIG_WARNING=true
+ENV npm_config_loglevel=silent
+ENV BAILEYS_LOG_LEVEL=silent
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
 # Crear usuario no root y configurar permisos
 RUN addgroup -g 1001 -S nodejs && \
@@ -59,5 +65,5 @@ USER nodejs
 # Exponer puerto
 EXPOSE 3000
 
-# Comando de inicio
-CMD ["pnpm", "start"]
+# Comando de inicio con logs reducidos
+CMD ["node", "--no-warnings", "src/app.js"]
