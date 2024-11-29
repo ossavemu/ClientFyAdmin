@@ -43,10 +43,6 @@ COPY --from=builder /app/calendar-prompt.txt ./
 COPY --from=builder /app/prompt.txt ./
 COPY --from=builder /app/.env ./
 
-# Configurar variables de entorno
-ENV NODE_ENV=production
-ENV PORT=3000
-
 # Crear usuario no root y configurar permisos
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S -u 1001 nodejs && \
@@ -55,9 +51,6 @@ RUN addgroup -g 1001 -S nodejs && \
     chmod -R 755 /app
 
 USER nodejs
-
-# Exponer puerto
-EXPOSE 3000
 
 # Comando de inicio
 CMD ["pnpm", "start"]
