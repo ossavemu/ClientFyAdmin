@@ -7,18 +7,28 @@ import { db } from './database/connection.js';
 
 const PORT = config.PORT;
 
+// Función para logs limpios
+const log = (message, error = false) => {
+  const timestamp = new Date().toISOString();
+  const prefix = error ? '❌ ERROR:' : '✅ INFO:';
+  console.log(`[${timestamp}] ${prefix} ${message}`);
+};
+
 const main = async () => {
   try {
-    // Verificar conexión a la base de datos
+    log('Iniciando aplicación...');
     await db.testConnection();
+    log('Conexión a base de datos establecida');
 
     const adapterFlow = templates;
     let adapterProvider;
 
     if (config.provider === 'meta') {
       adapterProvider = providerMeta;
+      log('Usando provider Meta');
     } else if (config.provider === 'baileys') {
       adapterProvider = providerBaileys;
+      log('Usando provider Baileys');
     } else {
       throw new Error('ERROR: Falta agregar un provider al .env');
     }
@@ -32,13 +42,14 @@ const main = async () => {
     });
 
     httpServer(+PORT);
+    log(`Servidor iniciado en puerto ${PORT}`);
 
-    // Iniciar el servicio de reminder
     reminder(adapterProvider);
+    log('Servicio de recordatorios iniciado');
 
-    console.log('🤖 Bot y servicios iniciados correctamente');
+    log('Bot y servicios iniciados correctamente');
   } catch (error) {
-    console.error('❌ Error iniciando el bot:', error);
+    log(error.message, true);
     process.exit(1);
   }
 };
