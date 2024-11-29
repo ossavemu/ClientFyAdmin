@@ -47,9 +47,9 @@ COPY --from=builder /app/.env ./
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S -u 1001 nodejs && \
     mkdir -p /app/logs && \
-    touch /app/core.class.log /app/queue.class.log && \
-    chown -R nodejs:nodejs /app/logs /app/core.class.log /app/queue.class.log && \
-    chmod -R 755 /app/logs /app/core.class.log /app/queue.class.log
+    touch /app/core.class.log /app/queue.class.log /app/baileys.log && \
+    chown -R nodejs:nodejs /app/logs /app/core.class.log /app/queue.class.log /app/baileys.log && \
+    chmod -R 755 /app/logs /app/core.class.log /app/queue.class.log /app/baileys.log
 
 USER nodejs
 
