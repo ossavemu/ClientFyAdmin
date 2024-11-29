@@ -20,7 +20,7 @@ RUN apk add --no-cache --virtual .gyp \
     && pnpm install \
     && apk del .gyp
 
-# Copiar código fuente y archivos de configuración
+# Copiar código fuente
 COPY . .
 
 # Production stage
@@ -42,6 +42,7 @@ COPY --from=builder /app/clientfycalendar.json ./
 COPY --from=builder /app/calendar-prompt.txt ./
 COPY --from=builder /app/prompt.txt ./
 COPY --from=builder /app/.env ./
+
 
 # Configurar permisos para los archivos de log
 RUN mkdir -p /app/logs && \
