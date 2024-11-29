@@ -45,11 +45,11 @@ COPY --from=builder /app/.env ./
 
 # Crear usuario no root y configurar permisos
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S -u 1001 nodejs && \
+    adduser -S -u 1001 -G nodejs nodejs && \
     mkdir -p /app/logs && \
     touch /app/core.class.log /app/queue.class.log /app/baileys.log && \
-    chown -R nodejs:nodejs /app/logs /app/core.class.log /app/queue.class.log /app/baileys.log && \
-    chmod -R 755 /app/logs /app/core.class.log /app/queue.class.log /app/baileys.log
+    chown -R nodejs:nodejs /app && \
+    chmod -R 775 /app
 
 USER nodejs
 
