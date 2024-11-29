@@ -1,11 +1,34 @@
 import { createBot, MemoryDB as Database } from '@builderbot/bot';
+import { createServer } from 'net';
 import { config } from './config/index.js';
+import { db } from './database/connection.js';
 import { providerBaileys, providerMeta } from './provider/index.js';
 import { reminder } from './services/reminder.js';
 import templates from './templates/index.js';
-import { db } from './database/connection.js';
 
-const PORT = config.PORT;
+const PORT = config.PORT || 3008;
+
+// Función para encontrar un puerto disponible
+const findAvailablePort = async (startPort) => {
+  const isPortAvailable = (port) => {
+    return new Promise((resolve) => {
+      const server = createServer()
+        .listen(port, () => {
+          server.close();
+          resolve(true);
+        })
+        .on('error', () => {
+          resolve(false);
+        });
+    });
+  };
+
+  let port = startPort;
+  while (!(await isPortAvailable(port))) {
+    port++;
+  }
+  return port;
+};
 
 // Función para logs limpios
 const log = (message, error = false) => {
@@ -35,14 +58,20 @@ const main = async () => {
 
     const adapterDB = new Database();
 
+    // Encontrar un puerto disponible
+    const availablePort = await findAvailablePort(PORT);
+    if (availablePort !== PORT) {
+      log(`Puerto ${PORT} en uso, usando puerto alternativo ${availablePort}`);
+    }
+
     const { httpServer } = await createBot({
       flow: adapterFlow,
       provider: adapterProvider,
       database: adapterDB,
     });
 
-    httpServer(+PORT);
-    log(`Servidor iniciado en puerto ${PORT}`);
+    httpServer(availablePort);
+    log(`Servidor iniciado en puerto ${availablePort}`);
 
     reminder(adapterProvider);
     log('Servicio de recordatorios iniciado');
