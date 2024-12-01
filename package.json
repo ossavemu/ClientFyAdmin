@@ -11,9 +11,7 @@
     "start-all": "sudo chmod +x start-tunnels.sh && ./start-tunnels.sh",
     "stop-all": "screen -S clientfy-bots -X quit; pkill -f \"node src/app.js\" && pkill -f \"cloudflared\"",
     "logs": "screen -r clientfy-bots",
-    "urls": "cat logs/tunnel_*.log | grep -E 'https://.*?(trycloudflare.com|loca.lt)'",
-    "tunnel": "lt --port",
-    "tunnel:cf": "cloudflared tunnel --url"
+    "urls": "cat logs/tunnel_*.log | grep -E \"https://.*?trycloudflare.com\""
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
@@ -36,8 +34,7 @@
     "openai": "4.68.4",
     "resend": "^4.0.1",
     "typescript": "5.6.3",
-    "zod": "^3.23.8",
-    "localtunnel": "^2.0.2"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "eslint": "^9.15.0",
