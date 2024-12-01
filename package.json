@@ -10,7 +10,8 @@
     "start": "node src/app.js",
     "start-all": "./start-instances.sh",
     "stop-all": "screen -S clientfy-bots -X quit; pkill -f \"node src/app.js\" && pkill -f \"cloudflared\"",
-    "logs": "screen -r clientfy-bots"
+    "logs": "screen -r clientfy-bots",
+    "urls": "grep -h \"https://\" tunnel_*.log"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
