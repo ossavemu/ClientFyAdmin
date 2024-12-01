@@ -9,7 +9,7 @@
     "migrate:down": "node -e 'require(\"./src/database/migrations/001_initial_schema.js\").down()'",
     "start": "node src/app.js",
     "start-all": "./start-instances.sh",
-    "stop-all": "pkill -f \"node src/app.js\""
+    "stop-all": "pkill -f \"node src/app.js\" && pkill -f \"cloudflared\""
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
