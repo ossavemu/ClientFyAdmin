@@ -6,7 +6,10 @@ import { providerBaileys, providerMeta } from './provider/index.js';
 import { reminder } from './services/reminder.js';
 import templates from './templates/index.js';
 
-const PORT = config.PORT || 3008;
+// Modificamos para tener un rango de puertos
+const BASE_PORT = 3008;
+const INSTANCE_ID = process.env.INSTANCE_ID || '1';
+const PORT = BASE_PORT + (parseInt(INSTANCE_ID) - 1);
 
 // Función para encontrar un puerto disponible
 const findAvailablePort = async (startPort) => {

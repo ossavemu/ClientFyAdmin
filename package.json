@@ -7,7 +7,9 @@
     "dev": "pnpm run lint && nodemon ./src/app.js",
     "migrate": "node src/database/migrations/runMigrations.js",
     "migrate:down": "node -e 'require(\"./src/database/migrations/001_initial_schema.js\").down()'",
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "start-all": "./start-instances.sh",
+    "stop-all": "pkill -f \"node src/app.js\""
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
