@@ -2,6 +2,24 @@
 
 SESSION_NAME="clientfy-bots"
 
+# Crear directorio para logs si no existe
+mkdir -p logs
+
+# Limpiar logs antiguos
+rm -f logs/tunnel_*.log
+
+# Verificar si la sesión ya existe y terminarla
+screen -ls | grep $SESSION_NAME > /dev/null
+if [ $? -eq 0 ]; then
+    echo "La sesión ya está corriendo. Deteniéndola..."
+    screen -S $SESSION_NAME -X quit
+    sleep 2
+fi
+
+# Crear el script temporal que se ejecutará dentro de screen
+cat > logs/tunnel_script.sh << 'EOF'
+#!/bin/bash
+
 # Función para crear túnel con Cloudflare
 create_cloudflare_tunnel() {
     local port=$1
@@ -49,55 +67,49 @@ create_localtunnel() {
     return 1
 }
 
-# Verificar si la sesión ya existe y terminarla
-screen -ls | grep $SESSION_NAME > /dev/null
-if [ $? -eq 0 ]; then
-    echo "La sesión ya está corriendo. Deteniéndola..."
-    screen -S $SESSION_NAME -X quit
+# Iniciar las instancias del bot
+for i in {1..4}; do
+    export INSTANCE_ID=$i
+    PORT=$((3007 + i))
+    echo "Iniciando instancia $i en puerto $PORT"
+    node src/app.js &
     sleep 2
-fi
-
-# Crear directorio para logs
-mkdir -p logs
-
-# Limpiar logs antiguos
-rm -f logs/tunnel_*.log
-
-# Crear nueva sesión de screen
-screen -dmS $SESSION_NAME bash -c '
-    # Iniciar las instancias del bot
-    for i in {1..4}; do
-        export INSTANCE_ID=$i
-        PORT=$((3007 + i))
-        echo "Iniciando instancia $i en puerto $PORT"
-        node src/app.js &
-        sleep 2
-        
-        # Intentar primero con Cloudflare
-        TUNNEL_RESULT=$(create_cloudflare_tunnel $PORT)
-        
-        if [[ $TUNNEL_RESULT == FAIL* ]]; then
-            echo "Cloudflare falló, intentando con Localtunnel..."
-            TUNNEL_URL=$(create_localtunnel $PORT)
-            if [ $? -eq 0 ]; then
-                echo "Puerto $PORT -> $TUNNEL_URL (Localtunnel)"
-            else
-                echo "Error: No se pudo crear túnel para puerto $PORT"
-            fi
+    
+    # Intentar primero con Cloudflare
+    TUNNEL_RESULT=$(create_cloudflare_tunnel $PORT)
+    
+    if [[ $TUNNEL_RESULT == FAIL* ]]; then
+        echo "Cloudflare falló, intentando con Localtunnel..."
+        TUNNEL_URL=$(create_localtunnel $PORT)
+        if [ $? -eq 0 ]; then
+            echo "Puerto $PORT -> $TUNNEL_URL (Localtunnel)"
         else
-            TUNNEL_URL=${TUNNEL_RESULT#SUCCESS:}
-            echo "Puerto $PORT -> $TUNNEL_URL (Cloudflare)"
+            echo "Error: No se pudo crear túnel para puerto $PORT"
         fi
-    done
+    else
+        TUNNEL_URL=${TUNNEL_RESULT#SUCCESS:}
+        echo "Puerto $PORT -> $TUNNEL_URL (Cloudflare)"
+    fi
+done
 
-    # Mantener el script ejecutándose
-    wait
-'
+# Mantener el script ejecutándose
+wait
+EOF
+
+# Hacer ejecutable el script temporal
+chmod +x logs/tunnel_script.sh
+
+# Crear nueva sesión de screen con el script temporal
+screen -dmS $SESSION_NAME bash -c 'cd "$(pwd)" && ./logs/tunnel_script.sh'
 
 echo "Sesión iniciada en background. Para ver los logs:"
 echo "screen -r $SESSION_NAME"
 
 # Esperar y mostrar URLs
-sleep 10
+sleep 15
 echo "URLs de los túneles:"
-cat logs/tunnel_*.log | grep -E "https://.*?(trycloudflare.com|loca.lt)"
+cat logs/tunnel_*.log | grep -E "https://.*?(trycloudflare.com|loca.lt)" 2>/dev/null || echo "Esperando URLs..."
+
+# Mostrar logs en tiempo real
+echo "Mostrando logs en tiempo real (Ctrl+C para salir):"
+tail -f logs/tunnel_*.log | grep -E "https://.*?(trycloudflare.com|loca.lt)"
