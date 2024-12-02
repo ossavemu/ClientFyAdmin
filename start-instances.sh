@@ -11,15 +11,15 @@ if [ $? -eq 0 ]; then
     sleep 2
 fi
 
-# Crear nueva sesión de screen
+# Crear nueva sesión de screen con sudo
 screen -dmS $SESSION_NAME bash -c '
     cd "$(dirname "$0")"
     
-    # Iniciar las instancias del bot
-    export INSTANCE_ID=1 && pnpm start &
-    export INSTANCE_ID=2 && pnpm start &
-    export INSTANCE_ID=3 && pnpm start &
-    export INSTANCE_ID=4 && pnpm start &
+    # Iniciar las instancias del bot con sudo
+    sudo INSTANCE_ID=1 pnpm start &
+    sudo INSTANCE_ID=2 pnpm start &
+    sudo INSTANCE_ID=3 pnpm start &
+    sudo INSTANCE_ID=4 pnpm start &
 
     # Mantener el script ejecutándose
     wait
@@ -29,7 +29,7 @@ echo "Sesión iniciada en background. Para ver los logs:"
 echo "screen -r $SESSION_NAME"
 echo ""
 echo "Los QR codes estarán disponibles en:"
-echo "http://localhost/bot1"
-echo "http://localhost/bot2"
-echo "http://localhost/bot3"
-echo "http://localhost/bot4" 
+echo "http://20.64.148.7/bot1"
+echo "http://20.64.148.7/bot2"
+echo "http://20.64.148.7/bot3"
+echo "http://20.64.148.7/bot4" 
