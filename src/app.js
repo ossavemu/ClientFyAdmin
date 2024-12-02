@@ -16,57 +16,104 @@ const main = async () => {
     log('Iniciando...');
     await db.testConnection();
 
-    const adapterProvider =
+    // Configurar provider
+    const provider =
       config.provider === 'meta' ? providerMeta : providerBaileys;
+    log(`Usando provider: ${config.provider}`);
 
-    log('Creando bot...');
-    const botInstance = await createBot({
+    // Configurar base de datos
+    const database = new Database();
+    log('Base de datos en memoria inicializada');
+
+    // Verificar templates
+    if (!templates || Object.keys(templates).length === 0) {
+      throw new Error('No se encontraron templates');
+    }
+    log(`Templates cargados: ${Object.keys(templates).length}`);
+
+    // Crear bot con configuración explícita
+    const botConfig = {
       flow: templates,
-      provider: adapterProvider,
-      database: new Database(),
+      provider: provider,
+      database: database,
       settings: {
         name: `Bot-${INSTANCE_ID}`,
         port: PORT,
+        blackList: [],
+        timeout: 30000,
       },
-    });
+    };
 
-    if (!botInstance) {
-      throw new Error('No se pudo crear la instancia del bot');
+    log('Creando instancia del bot...');
+    const instance = await createBot(botConfig);
+
+    if (!instance) {
+      throw new Error('createBot devolvió undefined');
     }
 
-    const { httpServer, bot } = botInstance;
+    log('Instancia creada, configurando componentes...');
 
-    if (!bot) {
-      throw new Error('Bot no disponible en la instancia');
+    // Extraer componentes
+    const { bot, httpServer } = instance;
+
+    // Configurar eventos del bot
+    if (bot) {
+      bot.on('ready', () => log('Bot conectado'));
+      bot.on('require_action', () => log('Esperando QR'));
+      bot.on('message', () => log('Mensaje recibido'));
+      bot.on('error', (err) => log(`Error del bot: ${err.message}`));
+      log('Eventos del bot configurados');
+    } else {
+      throw new Error('Bot no disponible después de crear la instancia');
     }
-
-    // Configurar eventos básicos
-    bot.on('ready', () => log('Bot conectado'));
-    bot.on('require_action', () => log('Esperando QR'));
-    bot.on('message', () => log('Mensaje recibido'));
-    bot.on('error', (err) => log(`Error: ${err.message}`));
 
     // Iniciar servidor HTTP
-    httpServer(PORT);
-    log(`Servidor iniciado en puerto ${PORT}`);
+    if (typeof httpServer === 'function') {
+      httpServer(PORT);
+      log(`Servidor HTTP iniciado en puerto ${PORT}`);
+    } else {
+      throw new Error('httpServer no es una función');
+    }
 
     // Iniciar recordatorios
-    reminder(adapterProvider);
-    log('Recordatorios iniciados');
+    try {
+      reminder(provider);
+      log('Servicio de recordatorios iniciado');
+    } catch (error) {
+      log(`Warning: Error iniciando recordatorios: ${error.message}`);
+    }
+
+    log('Bot iniciado completamente');
   } catch (error) {
-    log(`Error: ${error.message}`);
+    log(`Error fatal: ${error.message}`);
+    if (error.stack) {
+      log(`Stack: ${error.stack}`);
+    }
     process.exit(1);
   }
 };
 
+// Manejo de errores global
 process.on('uncaughtException', (err) => {
   log(`Error no capturado: ${err.message}`);
+  if (err.stack) {
+    log(`Stack: ${err.stack}`);
+  }
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
   log(`Promesa rechazada: ${reason}`);
+  if (reason instanceof Error && reason.stack) {
+    log(`Stack: ${reason.stack}`);
+  }
   process.exit(1);
 });
 
-main();
+main().catch((error) => {
+  log(`Error en main: ${error.message}`);
+  if (error.stack) {
+    log(`Stack: ${error.stack}`);
+  }
+  process.exit(1);
+});
