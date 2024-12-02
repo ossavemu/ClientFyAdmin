@@ -32,8 +32,8 @@ sudo screen -dmS $SESSION_NAME bash -c "
         local instance=\$1
         echo \"Iniciando Bot \$instance...\" | sudo tee -a logs/bot\$instance.log
         export INSTANCE_ID=\$instance
-        sudo -E node src/app.js >> logs/bot\$instance.log 2>&1 &
-        sleep 3
+        sudo -E pnpm start >> logs/bot\$instance.log 2>&1 &
+        sleep 5
         
         # Verificar si el bot inició correctamente
         local port=\$((3007 + instance))
@@ -41,12 +41,16 @@ sudo screen -dmS $SESSION_NAME bash -c "
             echo \"✅ Bot \$instance iniciado correctamente en puerto \$port\" | sudo tee -a logs/bot\$instance.log
         else
             echo \"❌ Error iniciando Bot \$instance en puerto \$port\" | sudo tee -a logs/bot\$instance.log
+            echo \"Mostrando últimas líneas del log:\" | sudo tee -a logs/bot\$instance.log
+            sudo tail -n 10 logs/bot\$instance.log | sudo tee -a logs/bot\$instance.log
         fi
     }
     
     # Iniciar bots secuencialmente
     for i in {1..4}; do
         start_bot \$i
+        # Esperar un poco más entre cada inicio
+        sleep 5
     done
     
     # Mostrar logs en tiempo real
@@ -62,9 +66,9 @@ echo "http://4.239.88.228/bot2"
 echo "http://4.239.88.228/bot3"
 echo "http://4.239.88.228/bot4"
 
-# Esperar a que los servicios inicien
+# Esperar más tiempo a que los servicios inicien
 echo "Esperando que los servicios inicien..."
-sleep 15
+sleep 20
 
 # Verificar estado de los servicios
 echo "Verificando estado de los servicios..."
@@ -75,6 +79,6 @@ for i in {1..4}; do
     else
         echo "❌ Bot $i no responde en puerto $port"
         echo "Últimas líneas del log:"
-        sudo tail -n 5 "logs/bot$i.log"
+        sudo tail -n 10 "logs/bot$i.log"
     fi
 done 
