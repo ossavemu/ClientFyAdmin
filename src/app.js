@@ -76,26 +76,33 @@ const main = async () => {
     // Crear servidor Express primero
     const app = express();
 
+    // Agregar middleware para logging
+    app.use((req, res, next) => {
+      log(`${req.method} ${req.url}`);
+      next();
+    });
+
+    // Agregar ruta de health check primero
+    app.get('/health', (req, res) => {
+      res.send('OK');
+    });
+
     // Iniciar Express antes que nada
     const expressServer = await new Promise((resolve, reject) => {
-      const server = app
-        .listen(80, '0.0.0.0', () => {
-          log('Servidor QR iniciado en puerto 80');
-          resolve(server);
-        })
-        .on('error', (err) => {
-          if (err.code === 'EACCES') {
-            log(
-              'Error: Se requieren privilegios de root para el puerto 80',
-              true
-            );
-          } else if (err.code === 'EADDRINUSE') {
-            log('Error: El puerto 80 ya está en uso', true);
-          } else {
+      try {
+        const server = app
+          .listen(80, '0.0.0.0', () => {
+            log('Servidor QR iniciado en puerto 80');
+            resolve(server);
+          })
+          .on('error', (err) => {
             log(`Error iniciando servidor Express: ${err.message}`, true);
-          }
-          reject(err);
-        });
+            reject(err);
+          });
+      } catch (err) {
+        log(`Error crítico iniciando Express: ${err.message}`, true);
+        reject(err);
+      }
     });
 
     await db.testConnection();
@@ -146,11 +153,6 @@ const main = async () => {
       }
     });
 
-    // Agregar ruta de health check
-    app.get('/health', (req, res) => {
-      res.send('OK');
-    });
-
     // Manejar eventos de conexión
     bot.on('ready', () => {
       updateBotState({
@@ -187,9 +189,22 @@ const main = async () => {
 
     log('Bot y servicios iniciados correctamente');
   } catch (error) {
-    log(error.message, true);
+    log(`Error fatal: ${error.message}`, true);
+    log(`Stack: ${error.stack}`, true);
     process.exit(1);
   }
 };
+
+// Manejar errores no capturados
+process.on('uncaughtException', (err) => {
+  log(`Error no capturado: ${err.message}`, true);
+  log(`Stack: ${err.stack}`, true);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  log(`Promesa rechazada no manejada: ${reason}`, true);
+  process.exit(1);
+});
 
 main();
