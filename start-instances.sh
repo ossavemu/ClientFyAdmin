@@ -9,14 +9,17 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Asegurar que el usuario actual sea el propietario de los directorios
 if [ ! -d logs ]; then
     mkdir -p logs
+    chmod 755 logs
 fi
 
 if [ ! -d data ]; then
     mkdir -p data
+    chmod 755 data
 fi
 
 if [ ! -d sessions ]; then
     mkdir -p sessions
+    chmod 755 sessions
 fi
 
 # Detener servicios previos
@@ -25,6 +28,18 @@ bash "$SCRIPT_DIR/stop-services.sh"
 
 # Limpiar logs antiguos
 rm -f logs/bot*.log
+
+# Verificar que pnpm está instalado
+if ! command -v pnpm &> /dev/null; then
+    echo "❌ Error: pnpm no está instalado"
+    exit 1
+fi
+
+# Verificar que los módulos están instalados
+if [ ! -d "node_modules" ]; then
+    echo "Instalando dependencias..."
+    pnpm install
+fi
 
 # Crear nueva sesión de screen
 screen -dmS $SESSION_NAME bash -c "
@@ -35,8 +50,16 @@ screen -dmS $SESSION_NAME bash -c "
         local instance=\$1
         echo \"Iniciando Bot \$instance...\" | tee -a logs/bot\$instance.log
         export INSTANCE_ID=\$instance
-        pnpm start >> logs/bot\$instance.log 2>&1 &
-        sleep 5
+        export NODE_ENV=production
+        
+        # Mostrar versión de Node
+        echo \"Node version: \$(node -v)\" | tee -a logs/bot\$instance.log
+        echo \"Working directory: \$(pwd)\" | tee -a logs/bot\$instance.log
+        
+        # Iniciar el bot con más información de debug
+        NODE_DEBUG=module pnpm start >> logs/bot\$instance.log 2>&1 &
+        local bot_pid=\$!
+        sleep 10
         
         # Verificar si el bot inició correctamente
         local port=\$((3008 + (instance - 1)))
@@ -45,7 +68,8 @@ screen -dmS $SESSION_NAME bash -c "
         else
             echo \"❌ Error iniciando Bot \$instance en puerto \$port\" | tee -a logs/bot\$instance.log
             echo \"Mostrando últimas líneas del log:\" | tee -a logs/bot\$instance.log
-            tail -n 10 logs/bot\$instance.log | tee -a logs/bot\$instance.log
+            tail -n 20 logs/bot\$instance.log | tee -a logs/bot\$instance.log
+            kill \$bot_pid 2>/dev/null || true
         fi
     }
     
@@ -81,6 +105,10 @@ for i in {1..4}; do
     else
         echo "❌ Bot $i no responde en puerto $port"
         echo "Últimas líneas del log:"
-        tail -n 10 "logs/bot$i.log"
+        if [ -f "logs/bot$i.log" ]; then
+            tail -n 20 "logs/bot$i.log"
+        else
+            echo "No se encontró el archivo de log"
+        fi
     fi
 done 
