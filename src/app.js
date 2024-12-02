@@ -1,6 +1,7 @@
 import { createBot, MemoryDB as Database } from '@builderbot/bot';
 import express from 'express';
 import fs from 'fs/promises';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import { createServer } from 'net';
 import path from 'path';
 import { config } from './config/index.js';
@@ -73,7 +74,7 @@ const main = async () => {
   try {
     log('Iniciando aplicación...');
 
-    // Crear servidor Express primero
+    // Crear servidor Express para el bot
     const app = express();
 
     // Agregar middleware para logging
@@ -82,17 +83,12 @@ const main = async () => {
       next();
     });
 
-    // Agregar ruta de health check primero
-    app.get('/health', (req, res) => {
-      res.send('OK');
-    });
-
-    // Iniciar Express antes que nada
+    // Iniciar Express en el puerto del bot
     const expressServer = await new Promise((resolve, reject) => {
       try {
         const server = app
           .listen(PORT, '0.0.0.0', () => {
-            log(`Servidor QR iniciado en puerto ${PORT}`);
+            log(`Servidor bot iniciado en puerto ${PORT}`);
             resolve(server);
           })
           .on('error', (err) => {
@@ -104,6 +100,35 @@ const main = async () => {
         reject(err);
       }
     });
+
+    // Si es la primera instancia, crear el proxy en puerto 80
+    if (INSTANCE_ID === '1') {
+      const proxyApp = express();
+
+      // Configurar proxy para cada bot
+      for (let i = 1; i <= 4; i++) {
+        const botPort = BASE_PORT + (i - 1);
+        proxyApp.use(
+          `/bot${i}`,
+          createProxyMiddleware({
+            target: `http://localhost:${botPort}`,
+            pathRewrite: {
+              [`^/bot${i}`]: `/bot${i}`,
+            },
+            changeOrigin: true,
+          })
+        );
+      }
+
+      // Iniciar proxy en puerto 80
+      proxyApp
+        .listen(80, '0.0.0.0', () => {
+          log('Proxy iniciado en puerto 80');
+        })
+        .on('error', (err) => {
+          log(`Error iniciando proxy: ${err.message}`, true);
+        });
+    }
 
     await db.testConnection();
     log('Conexión a base de datos establecida');

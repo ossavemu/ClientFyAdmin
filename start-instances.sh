@@ -21,14 +21,12 @@ check_port() {
 echo "Deteniendo servicios previos..."
 sudo ./stop-services.sh
 
-# Verificar que los puertos estén libres
-for port in {3008..3011}; do
-    if check_port $port; then
-        echo "ERROR: El puerto $port está en uso. Intentando liberar..."
-        sudo fuser -k $port/tcp
-        sleep 1
-    fi
-done
+# Verificar que el puerto 80 esté libre
+if check_port 80; then
+    echo "ERROR: El puerto 80 está en uso. Intentando liberar..."
+    sudo fuser -k 80/tcp
+    sleep 2
+fi
 
 # Crear nueva sesión de screen con sudo y logging
 screen -dmS $SESSION_NAME bash -c '
@@ -68,10 +66,10 @@ echo "Sesión iniciada en background. Para ver los logs:"
 echo "screen -r $SESSION_NAME"
 echo ""
 echo "Los QR codes estarán disponibles en:"
-echo "http://20.64.148.7:3008/bot1"
-echo "http://20.64.148.7:3009/bot2"
-echo "http://20.64.148.7:3010/bot3"
-echo "http://20.64.148.7:3011/bot4"
+echo "http://20.64.148.7/bot1"
+echo "http://20.64.148.7/bot2"
+echo "http://20.64.148.7/bot3"
+echo "http://20.64.148.7/bot4"
 
 # Verificar que los servicios están respondiendo
 echo "Verificando servicios..."
@@ -87,17 +85,9 @@ for i in {1..4}; do
     fi
 done
 
-# Mostrar logs si hay errores
-if ! ps aux | grep -q "[n]ode src/app.js"; then
-    echo "ADVERTENCIA: No se encontraron procesos de Node.js"
-    echo "Últimas líneas de los logs:"
-    for i in {1..4}; do
-        echo "=== Bot $i Logs ==="
-        tail -n 20 "logs/bot$i.log" 2>/dev/null || echo "No hay logs para Bot $i"
-    done
-    echo "Verificando puertos:"
-    for port in {3008..3011}; do
-        echo "Puerto $port:"
-        sudo netstat -tulpn | grep ":$port" || echo "Puerto $port no está en uso"
-    done
+# Verificar el proxy
+if ! curl -s "http://localhost/bot1/health" >/dev/null; then
+    echo "ADVERTENCIA: El proxy no está respondiendo"
+    echo "Verificando puerto 80:"
+    sudo netstat -tulpn | grep :80 || echo "Puerto 80 no está en uso"
 fi 
