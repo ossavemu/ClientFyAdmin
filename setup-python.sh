@@ -7,10 +7,7 @@ sudo apt update
 sudo apt install -y python3 python3-pip
 
 # Instalar las dependencias de Python
-pip3 install fastapi uvicorn
-
-# Dar permisos para usar el puerto 80
-sudo setcap CAP_NET_BIND_SERVICE=+eip /usr/bin/python3.10
+sudo pip3 install fastapi uvicorn
 
 # Crear un servicio systemd para el servidor FastAPI
 sudo cat > /etc/systemd/system/fastapi-server.service << 'EOF'
@@ -19,24 +16,29 @@ Description=FastAPI Server
 After=network.target
 
 [Service]
-User=azureuser
+Type=simple
+User=root
+Group=root
 WorkingDirectory=/home/azureuser/ClientFyAdmin/src
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ExecStart=/usr/local/bin/uvicorn api_server:app --host 0.0.0.0 --port 80
 Restart=always
+RestartSec=1
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Recargar systemd y habilitar el servicio
+# Recargar systemd
 sudo systemctl daemon-reload
+
+# Detener el servicio si está corriendo
+sudo systemctl stop fastapi-server
+
+# Habilitar y reiniciar el servicio
 sudo systemctl enable fastapi-server
 sudo systemctl start fastapi-server
 
-# Mostrar el estado del servicio
+# Mostrar el estado y los logs
 sudo systemctl status fastapi-server
-
-echo "=== Comandos útiles ==="
-echo "Ver logs del servidor: sudo journalctl -u fastapi-server -f"
-echo "Reiniciar servidor: sudo systemctl restart fastapi-server"
-echo "Ver estado: sudo systemctl status fastapi-server" 
+sudo journalctl -u fastapi-server -n 50 --no-pager 
