@@ -88,6 +88,55 @@ const main = async () => {
       res.send('OK');
     });
 
+    await db.testConnection();
+    log('Conexión a base de datos establecida');
+
+    const adapterFlow = templates;
+    let adapterProvider;
+
+    if (config.provider === 'meta') {
+      adapterProvider = providerMeta;
+      log('Usando provider Meta');
+    } else if (config.provider === 'baileys') {
+      adapterProvider = providerBaileys;
+      log('Usando provider Baileys');
+    } else {
+      throw new Error('ERROR: Falta agregar un provider al .env');
+    }
+
+    const adapterDB = new Database();
+
+    // Crear el bot primero
+    const { httpServer, bot } = await createBot({
+      flow: adapterFlow,
+      provider: adapterProvider,
+      database: adapterDB,
+      settings: {
+        host: '0.0.0.0',
+      },
+    });
+
+    // Configurar ruta para el QR después de crear el bot
+    app.get(`/bot${INSTANCE_ID}`, (req, res) => {
+      const qrCode = bot.getQRCode();
+      if (qrCode) {
+        res.send(`
+          <html>
+            <head>
+              <title>Bot ${INSTANCE_ID} QR Code</title>
+              <meta http-equiv="refresh" content="10">
+            </head>
+            <body>
+              <h1>Bot ${INSTANCE_ID} QR Code</h1>
+              <img src="${qrCode}" alt="QR Code">
+            </body>
+          </html>
+        `);
+      } else {
+        res.send(`Bot ${INSTANCE_ID} ya está conectado`);
+      }
+    });
+
     // Iniciar Express en el puerto del bot
     const expressServer = await new Promise((resolve, reject) => {
       try {
