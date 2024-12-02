@@ -4,92 +4,84 @@
 sudo apt update
 sudo apt install -y nginx
 
-# Crear configuración para el proxy reverso
+# Detener servicios existentes
+sudo systemctl stop nginx
+
+# Limpiar configuraciones anteriores
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo rm -f /etc/nginx/sites-enabled/clientfy
+sudo rm -f /etc/nginx/sites-available/clientfy
+
+# Crear configuración simple para el proxy reverso
 sudo cat > /etc/nginx/sites-available/clientfy << 'EOF'
 server {
-    listen 80;
+    listen 80 default_server;
+    listen [::]:80 default_server;
     server_name _;
 
-    # Configuración de logs
+    # Logs específicos
     access_log /var/log/nginx/clientfy_access.log;
-    error_log /var/log/nginx/clientfy_error.log;
+    error_log /var/log/nginx/clientfy_error.log debug;
 
-    # Aumentar timeouts
-    proxy_connect_timeout 60;
-    proxy_send_timeout 60;
-    proxy_read_timeout 60;
-    send_timeout 60;
+    # Configuración global de proxy
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 
-    location /bot1/ {
-        proxy_pass http://127.0.0.1:3008/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
+    # Timeouts más largos
+    proxy_connect_timeout 120;
+    proxy_send_timeout 120;
+    proxy_read_timeout 120;
+    send_timeout 120;
 
-    location /bot2/ {
-        proxy_pass http://127.0.0.1:3009/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
+    # Configuración de buffer
+    proxy_buffers 8 32k;
+    proxy_buffer_size 64k;
 
-    location /bot3/ {
-        proxy_pass http://127.0.0.1:3010/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /bot4/ {
-        proxy_pass http://127.0.0.1:3011/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /tunnels {
+    # Ruta principal para túneles
+    location = /tunnels {
         proxy_pass http://127.0.0.1:3008/tunnels;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Rutas para cada bot
+    location /bot1 {
+        proxy_pass http://127.0.0.1:3008;
+    }
+
+    location /bot2 {
+        proxy_pass http://127.0.0.1:3009;
+    }
+
+    location /bot3 {
+        proxy_pass http://127.0.0.1:3010;
+    }
+
+    location /bot4 {
+        proxy_pass http://127.0.0.1:3011;
     }
 }
 EOF
 
 # Activar el sitio
 sudo ln -sf /etc/nginx/sites-available/clientfy /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
 
 # Verificar configuración
 sudo nginx -t
 
-# Reiniciar Nginx
-sudo systemctl restart nginx
+# Reiniciar Nginx limpiamente
+sudo systemctl start nginx
 
-# Abrir puerto 80 en el firewall
+# Asegurar que el puerto 80 está abierto
 sudo ufw allow 80/tcp
 
-# Ver logs en tiempo real
-echo "Para ver logs de error en tiempo real:"
-echo "sudo tail -f /var/log/nginx/clientfy_error.log"
-echo "Para ver logs de acceso en tiempo real:"
-echo "sudo tail -f /var/log/nginx/clientfy_access.log"
+# Mostrar estado
+sudo systemctl status nginx
+
+# Mostrar comandos útiles
+echo "=== Comandos útiles ==="
+echo "Ver logs de error: sudo tail -f /var/log/nginx/clientfy_error.log"
+echo "Ver logs de acceso: sudo tail -f /var/log/nginx/clientfy_access.log"
+echo "Ver estado de nginx: sudo systemctl status nginx"
+echo "Verificar puertos en uso: sudo netstat -tulpn | grep -E ':80|:3008|:3009|:3010|:3011'"
