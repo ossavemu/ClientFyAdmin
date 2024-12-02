@@ -72,7 +72,7 @@ const log = (message, error = false) => {
 
 const main = async () => {
   try {
-    log('Iniciando aplicación...');
+    log(`Iniciando Bot ${INSTANCE_ID} en puerto ${PORT}...`);
 
     // Crear servidor Express para el bot
     const app = express();
@@ -83,52 +83,10 @@ const main = async () => {
       next();
     });
 
-    // Iniciar Express en el puerto del bot
-    const expressServer = await new Promise((resolve, reject) => {
-      try {
-        const server = app
-          .listen(PORT, '0.0.0.0', () => {
-            log(`Servidor bot iniciado en puerto ${PORT}`);
-            resolve(server);
-          })
-          .on('error', (err) => {
-            log(`Error iniciando servidor Express: ${err.message}`, true);
-            reject(err);
-          });
-      } catch (err) {
-        log(`Error crítico iniciando Express: ${err.message}`, true);
-        reject(err);
-      }
+    // Agregar ruta de health check primero
+    app.get('/health', (req, res) => {
+      res.send('OK');
     });
-
-    // Si es la primera instancia, crear el proxy en puerto 80
-    if (INSTANCE_ID === '1') {
-      const proxyApp = express();
-
-      // Configurar proxy para cada bot
-      for (let i = 1; i <= 4; i++) {
-        const botPort = BASE_PORT + (i - 1);
-        proxyApp.use(
-          `/bot${i}`,
-          createProxyMiddleware({
-            target: `http://localhost:${botPort}`,
-            pathRewrite: {
-              [`^/bot${i}`]: `/bot${i}`,
-            },
-            changeOrigin: true,
-          })
-        );
-      }
-
-      // Iniciar proxy en puerto 80
-      proxyApp
-        .listen(80, '0.0.0.0', () => {
-          log('Proxy iniciado en puerto 80');
-        })
-        .on('error', (err) => {
-          log(`Error iniciando proxy: ${err.message}`, true);
-        });
-    }
 
     await db.testConnection();
     log('Conexión a base de datos establecida');
@@ -148,6 +106,7 @@ const main = async () => {
 
     const adapterDB = new Database();
 
+    // Crear el bot primero
     const { httpServer, bot } = await createBot({
       flow: adapterFlow,
       provider: adapterProvider,
@@ -157,7 +116,7 @@ const main = async () => {
       },
     });
 
-    // Configurar ruta para el QR
+    // Configurar ruta para el QR después de crear el bot
     app.get(`/bot${INSTANCE_ID}`, (req, res) => {
       const qrCode = bot.getQRCode();
       if (qrCode) {
@@ -178,7 +137,56 @@ const main = async () => {
       }
     });
 
-    // Manejar eventos de conexión
+    // Iniciar Express en el puerto del bot
+    const expressServer = await new Promise((resolve, reject) => {
+      try {
+        const server = app
+          .listen(PORT, '0.0.0.0', () => {
+            log(`Bot ${INSTANCE_ID} escuchando en puerto ${PORT}`);
+            resolve(server);
+          })
+          .on('error', (err) => {
+            log(`Error iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
+            reject(err);
+          });
+      } catch (err) {
+        log(`Error crítico iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
+        reject(err);
+      }
+    });
+
+    // Si es la primera instancia, crear el proxy en puerto 80
+    if (INSTANCE_ID === '1') {
+      log('Iniciando proxy en puerto 80...');
+      const proxyApp = express();
+
+      // Configurar proxy para cada bot
+      for (let i = 1; i <= 4; i++) {
+        const botPort = BASE_PORT + (i - 1);
+        log(`Configurando proxy para Bot ${i} en puerto ${botPort}`);
+        proxyApp.use(
+          `/bot${i}`,
+          createProxyMiddleware({
+            target: `http://localhost:${botPort}`,
+            pathRewrite: {
+              [`^/bot${i}`]: `/bot${i}`,
+            },
+            changeOrigin: true,
+          })
+        );
+      }
+
+      // Iniciar proxy en puerto 80
+      proxyApp
+        .listen(80, '0.0.0.0', () => {
+          log('Proxy iniciado exitosamente en puerto 80');
+        })
+        .on('error', (err) => {
+          log(`Error iniciando proxy: ${err.message}`, true);
+        });
+    }
+
+    // Manejar eventos de conexión después de crear el bot
     bot.on('ready', () => {
       updateBotState({
         paired: true,
