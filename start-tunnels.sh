@@ -127,9 +127,18 @@ echo "Sesión iniciada en background. Para ver los logs:"
 echo "screen -r $SESSION_NAME"
 
 # Esperar y mostrar URLs
+echo "Esperando que los servicios estén listos..."
 sleep 180
-echo "URLs de los túneles:"
-curl -s http://localhost/tunnels | python3 -m json.tool
+
+# Verificar si FastAPI está respondiendo
+if curl -s -f http://localhost/tunnels > /dev/null 2>&1; then
+    echo "URLs de los túneles:"
+    curl -s http://localhost/tunnels | python3 -m json.tool
+else
+    echo "ERROR: El servidor FastAPI no está respondiendo."
+    echo "Mostrando URLs desde los logs:"
+    grep -h "https://.*trycloudflare\.com" logs/tunnel_*.log
+fi
 
 # Mostrar logs en tiempo real
 echo "Mostrando logs en tiempo real (Ctrl+C para salir):"
