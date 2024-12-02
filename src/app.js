@@ -19,12 +19,20 @@ const log = (message, error = false) => {
 const main = async () => {
   try {
     log(`Iniciando Bot ${INSTANCE_ID}...`);
+
+    // Verificar variables de entorno
+    log('Verificando configuración...');
+    if (!config.provider) {
+      throw new Error('Falta configurar provider en .env');
+    }
+
+    // Verificar conexión a base de datos
+    log('Conectando a base de datos...');
     await db.testConnection();
     log('Conexión a base de datos establecida');
 
-    const adapterFlow = templates;
+    // Configurar provider
     let adapterProvider;
-
     if (config.provider === 'meta') {
       adapterProvider = providerMeta;
       log('Usando provider Meta');
@@ -32,77 +40,97 @@ const main = async () => {
       adapterProvider = providerBaileys;
       log('Usando provider Baileys');
     } else {
-      throw new Error('ERROR: Falta agregar un provider al .env');
+      throw new Error(`Provider no válido: ${config.provider}`);
     }
 
+    // Verificar templates
+    log('Verificando templates...');
+    if (!templates || Object.keys(templates).length === 0) {
+      throw new Error('No se encontraron templates');
+    }
+    log(`Templates cargados: ${Object.keys(templates).length}`);
+
+    // Crear instancia de base de datos
+    log('Inicializando base de datos en memoria...');
     const adapterDB = new Database();
 
+    // Crear instancia del bot
     log('Creando instancia del bot...');
     const botInstance = await createBot({
-      flow: adapterFlow,
+      flow: templates,
       provider: adapterProvider,
       database: adapterDB,
       settings: {
         host: '0.0.0.0',
         port: PORT,
+        name: `Bot-${INSTANCE_ID}`,
       },
+    }).catch((error) => {
+      log(`Error creando bot: ${error.message}`, true);
+      throw error;
     });
 
     if (!botInstance) {
-      throw new Error('Error al crear la instancia del bot');
+      throw new Error('createBot devolvió undefined');
     }
 
+    log('Extrayendo componentes del bot...');
     const { httpServer, bot } = botInstance;
 
     if (!bot) {
-      throw new Error('Bot no inicializado correctamente');
+      throw new Error('Bot no disponible en la instancia');
+    }
+
+    if (!httpServer || typeof httpServer !== 'function') {
+      throw new Error('httpServer no disponible o no es una función');
     }
 
     log('Bot creado correctamente');
 
     // Configurar eventos del bot
-    try {
-      bot.on('ready', () => {
-        log('Bot listo y conectado');
-      });
+    log('Configurando eventos del bot...');
+    bot.on('ready', () => {
+      log(`Bot ${INSTANCE_ID} listo y conectado`);
+    });
 
-      bot.on('require_action', () => {
-        log('Bot esperando QR');
-      });
+    bot.on('require_action', () => {
+      log(`Bot ${INSTANCE_ID} esperando QR`);
+    });
 
-      bot.on('message', () => {
-        log('Mensaje recibido');
-      });
+    bot.on('message', () => {
+      log(`Bot ${INSTANCE_ID} recibió mensaje`);
+    });
 
-      bot.on('error', (err) => {
-        log(`Error en el bot: ${err.message}`, true);
-      });
+    bot.on('error', (err) => {
+      log(`Error en Bot ${INSTANCE_ID}: ${err.message}`, true);
+    });
 
-      log('Eventos del bot configurados');
-    } catch (error) {
-      log(`Error configurando eventos: ${error.message}`, true);
-      throw error;
-    }
+    log('Eventos configurados correctamente');
 
-    try {
-      httpServer(PORT);
-      log(`Servidor iniciado en puerto ${PORT}`);
-    } catch (error) {
-      log(`Error iniciando servidor HTTP: ${error.message}`, true);
-      throw error;
-    }
+    // Iniciar servidor HTTP
+    log(`Iniciando servidor en puerto ${PORT}...`);
+    await new Promise((resolve, reject) => {
+      try {
+        httpServer(PORT);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+    log(`Servidor HTTP iniciado en puerto ${PORT}`);
 
+    // Iniciar recordatorios
+    log('Iniciando servicio de recordatorios...');
     try {
       reminder(adapterProvider);
       log('Servicio de recordatorios iniciado');
     } catch (error) {
       log(`Error iniciando recordatorios: ${error.message}`, true);
-      // No lanzamos el error aquí para que el bot siga funcionando sin recordatorios
     }
 
-    log('Bot iniciado correctamente');
+    log(`Bot ${INSTANCE_ID} iniciado completamente`);
   } catch (error) {
-    log(`Error fatal: ${error.message}`, true);
+    log(`Error fatal en Bot ${INSTANCE_ID}: ${error.message}`, true);
     if (error.stack) {
       log(`Stack: ${error.stack}`, true);
     }
@@ -112,7 +140,7 @@ const main = async () => {
 
 // Manejar errores no capturados
 process.on('uncaughtException', (err) => {
-  log(`Error no capturado: ${err.message}`, true);
+  log(`Error no capturado en Bot ${INSTANCE_ID}: ${err.message}`, true);
   if (err.stack) {
     log(`Stack: ${err.stack}`, true);
   }
@@ -120,7 +148,7 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason) => {
-  log(`Promesa rechazada no manejada: ${reason}`, true);
+  log(`Promesa rechazada no manejada en Bot ${INSTANCE_ID}: ${reason}`, true);
   if (reason instanceof Error && reason.stack) {
     log(`Stack: ${reason.stack}`, true);
   }
