@@ -72,69 +72,15 @@ const log = (message, error = false) => {
 
 const main = async () => {
   try {
-    log(`Iniciando Bot ${INSTANCE_ID} en puerto ${PORT}...`);
-    
+    log('Iniciando aplicación...');
+
     // Crear servidor Express para el bot
     const app = express();
-    
+
     // Agregar middleware para logging
     app.use((req, res, next) => {
       log(`${req.method} ${req.url}`);
       next();
-    });
-
-    // Agregar ruta de health check primero
-    app.get('/health', (req, res) => {
-      res.send('OK');
-    });
-
-    await db.testConnection();
-    log('Conexión a base de datos establecida');
-
-    const adapterFlow = templates;
-    let adapterProvider;
-
-    if (config.provider === 'meta') {
-      adapterProvider = providerMeta;
-      log('Usando provider Meta');
-    } else if (config.provider === 'baileys') {
-      adapterProvider = providerBaileys;
-      log('Usando provider Baileys');
-    } else {
-      throw new Error('ERROR: Falta agregar un provider al .env');
-    }
-
-    const adapterDB = new Database();
-
-    // Crear el bot primero
-    const { httpServer, bot } = await createBot({
-      flow: adapterFlow,
-      provider: adapterProvider,
-      database: adapterDB,
-      settings: {
-        host: '0.0.0.0',
-      },
-    });
-
-    // Configurar ruta para el QR después de crear el bot
-    app.get(`/bot${INSTANCE_ID}`, (req, res) => {
-      const qrCode = bot.getQRCode();
-      if (qrCode) {
-        res.send(`
-          <html>
-            <head>
-              <title>Bot ${INSTANCE_ID} QR Code</title>
-              <meta http-equiv="refresh" content="10">
-            </head>
-            <body>
-              <h1>Bot ${INSTANCE_ID} QR Code</h1>
-              <img src="${qrCode}" alt="QR Code">
-            </body>
-          </html>
-        `);
-      } else {
-        res.send(`Bot ${INSTANCE_ID} ya está conectado`);
-      }
     });
 
     // Iniciar Express en el puerto del bot
@@ -142,28 +88,26 @@ const main = async () => {
       try {
         const server = app
           .listen(PORT, '0.0.0.0', () => {
-            log(`Bot ${INSTANCE_ID} escuchando en puerto ${PORT}`);
+            log(`Servidor bot iniciado en puerto ${PORT}`);
             resolve(server);
           })
           .on('error', (err) => {
-            log(`Error iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
+            log(`Error iniciando servidor Express: ${err.message}`, true);
             reject(err);
           });
       } catch (err) {
-        log(`Error crítico iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
+        log(`Error crítico iniciando Express: ${err.message}`, true);
         reject(err);
       }
     });
 
     // Si es la primera instancia, crear el proxy en puerto 80
     if (INSTANCE_ID === '1') {
-      log('Iniciando proxy en puerto 80...');
       const proxyApp = express();
 
       // Configurar proxy para cada bot
       for (let i = 1; i <= 4; i++) {
         const botPort = BASE_PORT + (i - 1);
-        log(`Configurando proxy para Bot ${i} en puerto ${botPort}`);
         proxyApp.use(
           `/bot${i}`,
           createProxyMiddleware({
@@ -179,7 +123,7 @@ const main = async () => {
       // Iniciar proxy en puerto 80
       proxyApp
         .listen(80, '0.0.0.0', () => {
-          log('Proxy iniciado exitosamente en puerto 80');
+          log('Proxy iniciado en puerto 80');
         })
         .on('error', (err) => {
           log(`Error iniciando proxy: ${err.message}`, true);
