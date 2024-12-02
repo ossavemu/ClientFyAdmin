@@ -91,8 +91,8 @@ const main = async () => {
     const expressServer = await new Promise((resolve, reject) => {
       try {
         const server = app
-          .listen(80, '0.0.0.0', () => {
-            log('Servidor QR iniciado en puerto 80');
+          .listen(PORT, '0.0.0.0', () => {
+            log(`Servidor QR iniciado en puerto ${PORT}`);
             resolve(server);
           })
           .on('error', (err) => {
