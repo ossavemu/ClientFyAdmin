@@ -105,7 +105,8 @@ const main = async () => {
     const adapterDB = new Database();
 
     // Crear el bot primero
-    const { httpServer, bot } = await createBot({
+    log('Creando instancia del bot...');
+    const botInstance = await createBot({
       flow: templates,
       provider: adapterProvider,
       database: adapterDB,
@@ -114,55 +115,84 @@ const main = async () => {
       },
     });
 
-    // Esperar a que el bot esté listo
-    await new Promise((resolve) => {
-      bot.on('ready', () => {
-        updateBotState({
-          paired: true,
-          status: 'connected',
-        });
-        resolve();
-      });
+    if (!botInstance || !botInstance.bot) {
+      throw new Error('Error creando instancia del bot');
+    }
 
-      bot.on('require_action', () => {
+    const { httpServer, bot } = botInstance;
+    log('Instancia del bot creada correctamente');
+
+    // Configurar eventos del bot
+    const setupBot = new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        log('Timeout esperando eventos del bot', true);
+        resolve();
+      }, 30000); // 30 segundos de timeout
+
+      try {
+        bot.on('ready', () => {
+          clearTimeout(timeout);
+          log('Bot listo y conectado');
+          updateBotState({
+            paired: true,
+            status: 'connected',
+          });
+          resolve();
+        });
+
+        bot.on('require_action', () => {
+          log('Bot esperando QR');
+          updateBotState({
+            paired: false,
+            status: 'waiting_qr',
+          });
+        });
+
+        bot.on('message', () => {
+          updateBotState({
+            paired: true,
+            status: 'connected',
+          });
+        });
+
+        // Inicializar estado como desconectado
         updateBotState({
           paired: false,
-          status: 'waiting_qr',
+          status: 'starting',
         });
-      });
-
-      bot.on('message', () => {
-        updateBotState({
-          paired: true,
-          status: 'connected',
-        });
-      });
+      } catch (error) {
+        clearTimeout(timeout);
+        log(`Error configurando eventos del bot: ${error.message}`, true);
+        resolve();
+      }
     });
 
-    // Inicializar estado como desconectado
-    await updateBotState({
-      paired: false,
-      status: 'starting',
-    });
+    // Esperar a que el bot esté configurado
+    await setupBot;
 
     // Configurar ruta para el QR después de crear el bot
     app.get(`/bot${INSTANCE_ID}`, (req, res) => {
-      const qrCode = bot.getQRCode();
-      if (qrCode) {
-        res.send(`
-          <html>
-            <head>
-              <title>Bot ${INSTANCE_ID} QR Code</title>
-              <meta http-equiv="refresh" content="10">
-            </head>
-            <body>
-              <h1>Bot ${INSTANCE_ID} QR Code</h1>
-              <img src="${qrCode}" alt="QR Code">
-            </body>
-          </html>
-        `);
-      } else {
-        res.send(`Bot ${INSTANCE_ID} ya está conectado`);
+      try {
+        const qrCode = bot.getQRCode();
+        if (qrCode) {
+          res.send(`
+            <html>
+              <head>
+                <title>Bot ${INSTANCE_ID} QR Code</title>
+                <meta http-equiv="refresh" content="10">
+              </head>
+              <body>
+                <h1>Bot ${INSTANCE_ID} QR Code</h1>
+                <img src="${qrCode}" alt="QR Code">
+              </body>
+            </html>
+          `);
+        } else {
+          res.send(`Bot ${INSTANCE_ID} ya está conectado`);
+        }
+      } catch (error) {
+        log(`Error obteniendo QR: ${error.message}`, true);
+        res.status(500).send(`Error: ${error.message}`);
       }
     });
 
