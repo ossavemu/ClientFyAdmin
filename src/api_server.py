@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 import os
 import re
@@ -11,6 +12,18 @@ from datetime import datetime
 import aiohttp
 import asyncio
 from pathlib import Path
+import logging
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('../logs/api_server.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -147,40 +160,63 @@ def read_bot_states() -> Dict:
 
 @app.get("/state", response_model=ServerState)
 async def get_server_state():
-    # Información del sistema
-    system = SystemState(
-        cpu_percent=psutil.cpu_percent(),
-        memory_percent=psutil.virtual_memory().percent,
-        disk_usage=psutil.disk_usage('/').percent,
-        uptime=str(datetime.now() - datetime.fromtimestamp(psutil.boot_time()))
-    )
-    
-    # Estado de cada bot
-    bots = []
-    bot_states = read_bot_states()
-    
-    for i in range(1, 5):
-        port = 3007 + i
-        process_info = get_process_info(port)
-        bot_state_data = bot_states.get(str(i), {})
-        
-        bot_state = BotState(
-            instance_id=i,
-            port=port,
-            is_running=process_info["is_running"],
-            is_paired=bot_state_data.get("paired", False),
-            uptime=process_info["uptime"],
-            memory_usage=process_info["memory_usage"],
-            last_activity=bot_state_data.get("lastUpdate", "Unknown"),
-            status=bot_state_data.get("status", "unknown")
+    try:
+        # Información del sistema
+        system = SystemState(
+            cpu_percent=psutil.cpu_percent(),
+            memory_percent=psutil.virtual_memory().percent,
+            disk_usage=psutil.disk_usage('/').percent,
+            uptime=str(datetime.now() - datetime.fromtimestamp(psutil.boot_time()))
         )
-        bots.append(bot_state)
+        
+        # Estado de cada bot
+        bots = []
+        bot_states = read_bot_states()
+        
+        for i in range(1, 5):
+            try:
+                port = 3007 + i
+                process_info = get_process_info(port)
+                bot_state_data = bot_states.get(str(i), {})
+                
+                bot_state = BotState(
+                    instance_id=i,
+                    port=port,
+                    is_running=process_info["is_running"],
+                    is_paired=bot_state_data.get("paired", False),
+                    uptime=process_info["uptime"],
+                    memory_usage=process_info["memory_usage"],
+                    last_activity=bot_state_data.get("lastUpdate", "Unknown"),
+                    status=bot_state_data.get("status", "unknown")
+                )
+                bots.append(bot_state)
+            except Exception as e:
+                logger.error(f"Error al procesar bot {i}: {str(e)}")
+                continue
 
-    return ServerState(
-        timestamp=datetime.now().isoformat(),
-        system=system,
-        bots=bots
+        return ServerState(
+            timestamp=datetime.now().isoformat(),
+            system=system,
+            bots=bots
+        )
+    except Exception as e:
+        logger.error(f"Error en get_server_state: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener el estado del servidor")
+
+# Agregar manejador de errores global
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Error no manejado: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno del servidor"}
     )
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=80) 
+    try:
+        logger.info("Iniciando servidor FastAPI...")
+        # Cambiar puerto a 3000 para evitar conflictos
+        uvicorn.run(app, host="0.0.0.0", port=3000, log_level="info")
+    except Exception as e:
+        logger.error(f"Error al iniciar el servidor: {str(e)}")
+        raise 
