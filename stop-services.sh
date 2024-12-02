@@ -2,7 +2,8 @@
 
 echo "Deteniendo todos los servicios..."
 
-# Detener screen session si existe
+# Limpiar pantallas muertas y detener sesiones existentes
+screen -wipe >/dev/null 2>&1
 screen -ls | grep -q "clientfy-bots" && screen -S clientfy-bots -X quit
 
 # Detener procesos de Node
