@@ -37,37 +37,75 @@ const main = async () => {
 
     const adapterDB = new Database();
 
-    const { httpServer, bot } = await createBot({
+    log('Creando instancia del bot...');
+    const botInstance = await createBot({
       flow: adapterFlow,
       provider: adapterProvider,
       database: adapterDB,
       settings: {
         host: '0.0.0.0',
+        port: PORT,
       },
     });
 
+    if (!botInstance) {
+      throw new Error('Error al crear la instancia del bot');
+    }
+
+    const { httpServer, bot } = botInstance;
+
+    if (!bot) {
+      throw new Error('Bot no inicializado correctamente');
+    }
+
+    log('Bot creado correctamente');
+
     // Configurar eventos del bot
-    bot.on('ready', () => {
-      log('Bot listo y conectado');
-    });
+    try {
+      bot.on('ready', () => {
+        log('Bot listo y conectado');
+      });
 
-    bot.on('require_action', () => {
-      log('Bot esperando QR');
-    });
+      bot.on('require_action', () => {
+        log('Bot esperando QR');
+      });
 
-    bot.on('message', () => {
-      log('Mensaje recibido');
-    });
+      bot.on('message', () => {
+        log('Mensaje recibido');
+      });
 
-    httpServer(PORT);
-    log(`Servidor iniciado en puerto ${PORT}`);
+      bot.on('error', (err) => {
+        log(`Error en el bot: ${err.message}`, true);
+      });
 
-    reminder(adapterProvider);
-    log('Servicio de recordatorios iniciado');
+      log('Eventos del bot configurados');
+    } catch (error) {
+      log(`Error configurando eventos: ${error.message}`, true);
+      throw error;
+    }
+
+    try {
+      httpServer(PORT);
+      log(`Servidor iniciado en puerto ${PORT}`);
+    } catch (error) {
+      log(`Error iniciando servidor HTTP: ${error.message}`, true);
+      throw error;
+    }
+
+    try {
+      reminder(adapterProvider);
+      log('Servicio de recordatorios iniciado');
+    } catch (error) {
+      log(`Error iniciando recordatorios: ${error.message}`, true);
+      // No lanzamos el error aquí para que el bot siga funcionando sin recordatorios
+    }
 
     log('Bot iniciado correctamente');
   } catch (error) {
-    log(error.message, true);
+    log(`Error fatal: ${error.message}`, true);
+    if (error.stack) {
+      log(`Stack: ${error.stack}`, true);
+    }
     process.exit(1);
   }
 };
@@ -75,11 +113,17 @@ const main = async () => {
 // Manejar errores no capturados
 process.on('uncaughtException', (err) => {
   log(`Error no capturado: ${err.message}`, true);
+  if (err.stack) {
+    log(`Stack: ${err.stack}`, true);
+  }
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
   log(`Promesa rechazada no manejada: ${reason}`, true);
+  if (reason instanceof Error && reason.stack) {
+    log(`Stack: ${reason.stack}`, true);
+  }
   process.exit(1);
 });
 
