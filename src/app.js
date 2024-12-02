@@ -4,7 +4,6 @@ import { config } from './config/index.js';
 import { db } from './database/connection.js';
 import { providerBaileys, providerMeta } from './provider/index.js';
 import { reminder } from './services/reminder.js';
-import { TunnelService } from './services/tunnels.js';
 import templates from './templates/index.js';
 
 // Modificamos para tener un rango de puertos
@@ -62,46 +61,18 @@ const main = async () => {
 
     const adapterDB = new Database();
 
-    // Encontrar un puerto disponible
     const availablePort = await findAvailablePort(PORT);
     if (availablePort !== PORT) {
       log(`Puerto ${PORT} en uso, usando puerto alternativo ${availablePort}`);
     }
 
-    const { httpServer, serverHttp } = await createBot({
+    const { httpServer } = await createBot({
       flow: adapterFlow,
       provider: adapterProvider,
       database: adapterDB,
       settings: {
         host: '0.0.0.0',
       },
-    });
-
-    // Añadir endpoint para túneles antes de iniciar el servidor
-    serverHttp.get('/tunnels', async (req, res) => {
-      try {
-        const tunnels = await TunnelService.getTunnels();
-        res.setHeader('Content-Type', 'application/json');
-        res.end(
-          JSON.stringify(
-            {
-              status: 'success',
-              data: tunnels,
-              timestamp: new Date().toISOString(),
-            },
-            null,
-            2
-          )
-        );
-      } catch (error) {
-        res.statusCode = 500;
-        res.end(
-          JSON.stringify({
-            status: 'error',
-            message: error.message,
-          })
-        );
-      }
     });
 
     httpServer(availablePort);
