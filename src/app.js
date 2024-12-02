@@ -91,9 +91,7 @@ const main = async () => {
     await db.testConnection();
     log('Conexión a base de datos establecida');
 
-    const adapterFlow = templates;
     let adapterProvider;
-
     if (config.provider === 'meta') {
       adapterProvider = providerMeta;
       log('Usando provider Meta');
@@ -108,12 +106,43 @@ const main = async () => {
 
     // Crear el bot primero
     const { httpServer, bot } = await createBot({
-      flow: adapterFlow,
+      flow: templates,
       provider: adapterProvider,
       database: adapterDB,
       settings: {
         host: '0.0.0.0',
       },
+    });
+
+    // Esperar a que el bot esté listo
+    await new Promise((resolve) => {
+      bot.on('ready', () => {
+        updateBotState({
+          paired: true,
+          status: 'connected',
+        });
+        resolve();
+      });
+
+      bot.on('require_action', () => {
+        updateBotState({
+          paired: false,
+          status: 'waiting_qr',
+        });
+      });
+
+      bot.on('message', () => {
+        updateBotState({
+          paired: true,
+          status: 'connected',
+        });
+      });
+    });
+
+    // Inicializar estado como desconectado
+    await updateBotState({
+      paired: false,
+      status: 'starting',
     });
 
     // Configurar ruta para el QR después de crear el bot
@@ -172,6 +201,10 @@ const main = async () => {
               [`^/bot${i}`]: `/bot${i}`,
             },
             changeOrigin: true,
+            onError: (err, req, res) => {
+              log(`Error en proxy para Bot ${i}: ${err.message}`, true);
+              res.status(502).send(`Error de proxy: ${err.message}`);
+            },
           })
         );
       }
@@ -185,34 +218,6 @@ const main = async () => {
           log(`Error iniciando proxy: ${err.message}`, true);
         });
     }
-
-    // Manejar eventos de conexión después de crear el bot
-    bot.on('ready', () => {
-      updateBotState({
-        paired: true,
-        status: 'connected',
-      });
-    });
-
-    bot.on('require_action', () => {
-      updateBotState({
-        paired: false,
-        status: 'waiting_qr',
-      });
-    });
-
-    bot.on('message', () => {
-      updateBotState({
-        paired: true,
-        status: 'connected',
-      });
-    });
-
-    // Inicializar estado como desconectado
-    await updateBotState({
-      paired: false,
-      status: 'starting',
-    });
 
     httpServer(PORT);
     log(`Servidor bot iniciado en puerto ${PORT}`);
