@@ -17,9 +17,12 @@ check_port() {
     return $?
 }
 
-# Detener servicios previos
+# Obtener el directorio actual del script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Detener servicios previos usando ruta completa
 echo "Deteniendo servicios previos..."
-sudo ./stop-services.sh
+sudo "$SCRIPT_DIR/stop-services.sh"
 
 # Verificar que el puerto 80 esté libre
 if check_port 80; then

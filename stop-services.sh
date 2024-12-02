@@ -2,33 +2,34 @@
 
 echo "Deteniendo todos los servicios..."
 
-# Detener screen session
-screen -S clientfy-bots -X quit 2>/dev/null
+# Detener screen session si existe
+screen -ls | grep -q "clientfy-bots" && screen -S clientfy-bots -X quit
 
-# Detener todos los procesos con sudo
-sudo pkill -9 -f "node src/app.js"
+# Detener procesos de Node
+sudo pkill -f "node src/app.js" || true
 
-# Asegurarnos que los puertos estén libres
-for port in {3008..3011}; do
-    sudo fuser -k $port/tcp 2>/dev/null
+# Detener procesos en los puertos específicos
+for port in {3008..3011} 80; do
+    sudo fuser -k $port/tcp 2>/dev/null || true
 done
 
-# Esperar un momento para asegurarnos que todo se detuvo
+# Esperar un momento
 sleep 2
 
 # Verificar que los puertos estén libres
-for port in {3008..3011}; do
+echo "Verificando puertos..."
+for port in {3008..3011} 80; do
     if sudo lsof -i ":$port" >/dev/null 2>&1; then
-        echo "ERROR: El puerto $port aún está en uso"
-        echo "Procesos usando el puerto $port:"
-        sudo lsof -i ":$port"
+        echo "ADVERTENCIA: Puerto $port aún en uso"
+    else
+        echo "✅ Puerto $port libre"
     fi
 done
 
-# Verificar que no hay procesos de node
-if ps aux | grep -q "[n]ode src/app.js"; then
-    echo "ERROR: Aún hay procesos de Node.js ejecutándose"
-    ps aux | grep "[n]ode src/app.js"
+# Verificar procesos de Node
+if pgrep -f "node src/app.js" >/dev/null; then
+    echo "ADVERTENCIA: Aún hay procesos Node.js ejecutándose"
+    pgrep -af "node src/app.js"
 else
-    echo "✅ Todos los servicios detenidos correctamente"
+    echo "✅ No hay procesos Node.js ejecutándose"
 fi 
