@@ -1,67 +1,13 @@
 import { createBot, MemoryDB as Database } from '@builderbot/bot';
-import express from 'express';
-import fs from 'fs/promises';
-import { createProxyMiddleware } from 'http-proxy-middleware';
-import { createServer } from 'net';
-import path from 'path';
 import { config } from './config/index.js';
 import { db } from './database/connection.js';
 import { providerBaileys, providerMeta } from './provider/index.js';
 import { reminder } from './services/reminder.js';
 import templates from './templates/index.js';
 
-// Modificamos para tener un rango de puertos
 const BASE_PORT = 3008;
 const INSTANCE_ID = process.env.INSTANCE_ID || '1';
 const PORT = BASE_PORT + (parseInt(INSTANCE_ID) - 1);
-
-// Función para actualizar el estado en el archivo JSON
-const updateBotState = async (state) => {
-  try {
-    const stateFile = path.join(process.cwd(), '..', 'data', 'bot_states.json');
-    let states = {};
-
-    try {
-      const data = await fs.readFile(stateFile, 'utf8');
-      states = JSON.parse(data);
-    } catch (error) {
-      // Si el archivo no existe o está corrupto, empezamos con un objeto vacío
-    }
-
-    states[INSTANCE_ID] = {
-      ...state,
-      lastUpdate: new Date().toISOString(),
-      port: PORT,
-    };
-
-    await fs.mkdir(path.dirname(stateFile), { recursive: true });
-    await fs.writeFile(stateFile, JSON.stringify(states, null, 2));
-  } catch (error) {
-    console.error('Error actualizando estado:', error);
-  }
-};
-
-// Función para encontrar un puerto disponible
-const findAvailablePort = async (startPort) => {
-  const isPortAvailable = (port) => {
-    return new Promise((resolve) => {
-      const server = createServer()
-        .listen(port, () => {
-          server.close();
-          resolve(true);
-        })
-        .on('error', () => {
-          resolve(false);
-        });
-    });
-  };
-
-  let port = startPort;
-  while (!(await isPortAvailable(port))) {
-    port++;
-  }
-  return port;
-};
 
 // Función para logs limpios
 const log = (message, error = false) => {
@@ -72,26 +18,13 @@ const log = (message, error = false) => {
 
 const main = async () => {
   try {
-    log(`Iniciando Bot ${INSTANCE_ID} en puerto ${PORT}...`);
-
-    // Crear servidor Express para el bot
-    const app = express();
-
-    // Agregar middleware para logging
-    app.use((req, res, next) => {
-      log(`${req.method} ${req.url}`);
-      next();
-    });
-
-    // Agregar ruta de health check primero
-    app.get('/health', (req, res) => {
-      res.send('OK');
-    });
-
+    log(`Iniciando Bot ${INSTANCE_ID}...`);
     await db.testConnection();
     log('Conexión a base de datos establecida');
 
+    const adapterFlow = templates;
     let adapterProvider;
+
     if (config.provider === 'meta') {
       adapterProvider = providerMeta;
       log('Usando provider Meta');
@@ -104,10 +37,8 @@ const main = async () => {
 
     const adapterDB = new Database();
 
-    // Crear el bot primero
-    log('Creando instancia del bot...');
-    const botInstance = await createBot({
-      flow: templates,
+    const { httpServer, bot } = await createBot({
+      flow: adapterFlow,
       provider: adapterProvider,
       database: adapterDB,
       settings: {
@@ -115,150 +46,28 @@ const main = async () => {
       },
     });
 
-    if (!botInstance || !botInstance.bot) {
-      throw new Error('Error creando instancia del bot');
-    }
-
-    const { httpServer, bot } = botInstance;
-    log('Instancia del bot creada correctamente');
-
     // Configurar eventos del bot
-    const setupBot = new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        log('Timeout esperando eventos del bot', true);
-        resolve();
-      }, 30000); // 30 segundos de timeout
-
-      try {
-        bot.on('ready', () => {
-          clearTimeout(timeout);
-          log('Bot listo y conectado');
-          updateBotState({
-            paired: true,
-            status: 'connected',
-          });
-          resolve();
-        });
-
-        bot.on('require_action', () => {
-          log('Bot esperando QR');
-          updateBotState({
-            paired: false,
-            status: 'waiting_qr',
-          });
-        });
-
-        bot.on('message', () => {
-          updateBotState({
-            paired: true,
-            status: 'connected',
-          });
-        });
-
-        // Inicializar estado como desconectado
-        updateBotState({
-          paired: false,
-          status: 'starting',
-        });
-      } catch (error) {
-        clearTimeout(timeout);
-        log(`Error configurando eventos del bot: ${error.message}`, true);
-        resolve();
-      }
+    bot.on('ready', () => {
+      log('Bot listo y conectado');
     });
 
-    // Esperar a que el bot esté configurado
-    await setupBot;
-
-    // Configurar ruta para el QR después de crear el bot
-    app.get(`/bot${INSTANCE_ID}`, (req, res) => {
-      try {
-        const qrCode = bot.getQRCode();
-        if (qrCode) {
-          res.send(`
-            <html>
-              <head>
-                <title>Bot ${INSTANCE_ID} QR Code</title>
-                <meta http-equiv="refresh" content="10">
-              </head>
-              <body>
-                <h1>Bot ${INSTANCE_ID} QR Code</h1>
-                <img src="${qrCode}" alt="QR Code">
-              </body>
-            </html>
-          `);
-        } else {
-          res.send(`Bot ${INSTANCE_ID} ya está conectado`);
-        }
-      } catch (error) {
-        log(`Error obteniendo QR: ${error.message}`, true);
-        res.status(500).send(`Error: ${error.message}`);
-      }
+    bot.on('require_action', () => {
+      log('Bot esperando QR');
     });
 
-    // Iniciar Express en el puerto del bot
-    const expressServer = await new Promise((resolve, reject) => {
-      try {
-        const server = app
-          .listen(PORT, '0.0.0.0', () => {
-            log(`Bot ${INSTANCE_ID} escuchando en puerto ${PORT}`);
-            resolve(server);
-          })
-          .on('error', (err) => {
-            log(`Error iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
-            reject(err);
-          });
-      } catch (err) {
-        log(`Error crítico iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
-        reject(err);
-      }
+    bot.on('message', () => {
+      log('Mensaje recibido');
     });
-
-    // Si es la primera instancia, crear el proxy en puerto 80
-    if (INSTANCE_ID === '1') {
-      log('Iniciando proxy en puerto 80...');
-      const proxyApp = express();
-
-      // Configurar proxy para cada bot
-      for (let i = 1; i <= 4; i++) {
-        const botPort = BASE_PORT + (i - 1);
-        log(`Configurando proxy para Bot ${i} en puerto ${botPort}`);
-        proxyApp.use(
-          `/bot${i}`,
-          createProxyMiddleware({
-            target: `http://localhost:${botPort}`,
-            pathRewrite: {
-              [`^/bot${i}`]: `/bot${i}`,
-            },
-            changeOrigin: true,
-            onError: (err, req, res) => {
-              log(`Error en proxy para Bot ${i}: ${err.message}`, true);
-              res.status(502).send(`Error de proxy: ${err.message}`);
-            },
-          })
-        );
-      }
-
-      // Iniciar proxy en puerto 80
-      proxyApp
-        .listen(80, '0.0.0.0', () => {
-          log('Proxy iniciado exitosamente en puerto 80');
-        })
-        .on('error', (err) => {
-          log(`Error iniciando proxy: ${err.message}`, true);
-        });
-    }
 
     httpServer(PORT);
-    log(`Servidor bot iniciado en puerto ${PORT}`);
+    log(`Servidor iniciado en puerto ${PORT}`);
 
     reminder(adapterProvider);
     log('Servicio de recordatorios iniciado');
 
-    log('Bot y servicios iniciados correctamente');
+    log('Bot iniciado correctamente');
   } catch (error) {
-    log(`Error fatal: ${error.message}`, true);
-    log(`Stack: ${error.stack}`, true);
+    log(error.message, true);
     process.exit(1);
   }
 };
@@ -266,11 +75,10 @@ const main = async () => {
 // Manejar errores no capturados
 process.on('uncaughtException', (err) => {
   log(`Error no capturado: ${err.message}`, true);
-  log(`Stack: ${err.stack}`, true);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   log(`Promesa rechazada no manejada: ${reason}`, true);
   process.exit(1);
 });
