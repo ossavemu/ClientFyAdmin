@@ -8,6 +8,14 @@ mkdir -p logs
 # Limpiar logs antiguos
 rm -f logs/tunnel_*.log
 
+# Verificar si la sesión ya existe y terminarla
+screen -ls | grep $SESSION_NAME > /dev/null
+if [ $? -eq 0 ]; then
+    echo "La sesión ya está corriendo. Deteniéndola..."
+    screen -S $SESSION_NAME -X quit
+    sleep 2
+fi
+
 # Crear el script temporal que se ejecutará dentro de screen
 cat > logs/tunnel_script.sh << 'EOF'
 #!/bin/bash
