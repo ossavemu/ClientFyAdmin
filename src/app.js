@@ -4,8 +4,8 @@ import { config } from './config/index.js';
 import { db } from './database/connection.js';
 import { providerBaileys, providerMeta } from './provider/index.js';
 import { reminder } from './services/reminder.js';
-import templates from './templates/index.js';
 import { TunnelService } from './services/tunnels.js';
+import templates from './templates/index.js';
 
 // Modificamos para tener un rango de puertos
 const BASE_PORT = 3008;
@@ -72,6 +72,9 @@ const main = async () => {
       flow: adapterFlow,
       provider: adapterProvider,
       database: adapterDB,
+      settings: {
+        host: '0.0.0.0',
+      },
     });
 
     // Añadir endpoint para túneles antes de iniciar el servidor

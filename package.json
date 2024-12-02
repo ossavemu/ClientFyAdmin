@@ -8,10 +8,11 @@
     "migrate": "node src/database/migrations/runMigrations.js",
     "migrate:down": "node -e 'require(\"./src/database/migrations/001_initial_schema.js\").down()'",
     "start": "node src/app.js",
-    "start-all": "sudo chmod +x start-tunnels.sh && ./start-tunnels.sh",
+    "start-all": "sudo chmod +x start-tunnels.sh && ./start-tunnels.sh && pnpm gateway",
     "stop-all": "screen -S clientfy-bots -X quit; pkill -f \"node src/app.js\" && pkill -f \"cloudflared\"",
     "logs": "screen -r clientfy-bots",
-    "urls": "cat logs/tunnel_*.log | grep -E \"https://.*?trycloudflare.com\""
+    "urls": "cat logs/tunnel_*.log | grep -E \"https://.*?trycloudflare.com\"",
+    "gateway": "sudo node src/gateway.js"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
