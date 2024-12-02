@@ -20,42 +20,11 @@ fi
 cat > logs/tunnel_script.sh << 'EOF'
 #!/bin/bash
 
-# Función para crear túnel con Cloudflare
-create_cloudflare_tunnel() {
-    local port=$1
-    local log_file="logs/tunnel_${port}.log"
-    
-    echo "Intentando crear túnel Cloudflare para puerto $port..."
-    cloudflared tunnel --url "http://localhost:${port}" > "$log_file" 2>&1 &
-    local cloudflared_pid=$!
-    
-    # Esperar hasta 40 segundos por la URL de Cloudflare
-    local counter=0
-    while [ $counter -lt 40 ]; do
-        if grep -q "https://.*trycloudflare.com" "$log_file" 2>/dev/null; then
-            local url=$(grep -o "https://.*trycloudflare.com" "$log_file" | head -n 1)
-            echo "SUCCESS:$url:$cloudflared_pid"
-            return 0
-        fi
-        sleep 1
-        counter=$((counter + 1))
-    done
-    
-    # Si falló, matar el proceso de cloudflared
-    kill $cloudflared_pid 2>/dev/null
-    echo "FAIL"
-    return 1
-}
-
-# Array para guardar los PIDs de los túneles
-declare -a TUNNEL_PIDS=()
-
-# Función para limpiar los túneles al salir
+# Función para limpiar al salir
 cleanup() {
     echo "Limpiando túneles..."
-    for pid in "${TUNNEL_PIDS[@]}"; do
-        kill $pid 2>/dev/null
-    done
+    pkill -f "cloudflared tunnel"
+    pkill -f "uvicorn api_server:app"
     exit 0
 }
 
@@ -71,21 +40,17 @@ for i in {1..4}; do
     sleep 2
     
     echo "Creando túnel para instancia $i (puerto $PORT)"
-    TUNNEL_RESULT=$(create_cloudflare_tunnel $PORT)
-    
-    if [[ $TUNNEL_RESULT == SUCCESS* ]]; then
-        URL=$(echo $TUNNEL_RESULT | cut -d':' -f2)
-        PID=$(echo $TUNNEL_RESULT | cut -d':' -f3)
-        TUNNEL_PIDS+=($PID)
-        echo "Puerto $PORT -> $URL (Cloudflare)"
-    else
-        echo "Error: No se pudo crear túnel para puerto $PORT"
-    fi
+    cloudflared tunnel --url "http://localhost:${PORT}" > "logs/tunnel_${PORT}.log" 2>&1 &
     
     # Esperar 40 segundos entre cada túnel
     echo "Esperando 40 segundos antes de crear el siguiente túnel..."
     sleep 40
 done
+
+# Iniciar el servidor FastAPI
+echo "Iniciando servidor FastAPI..."
+cd src
+/opt/venv/bin/python -m uvicorn api_server:app --host 0.0.0.0 --port 80 &
 
 # Mantener el script ejecutándose
 wait
@@ -100,10 +65,10 @@ screen -dmS $SESSION_NAME bash -c 'cd "$(pwd)" && ./logs/tunnel_script.sh'
 echo "Sesión iniciada en background. Para ver los logs:"
 echo "screen -r $SESSION_NAME"
 
-# Esperar y mostrar URLs (esperamos más tiempo ya que ahora hay más delays)
+# Esperar y mostrar URLs
 sleep 180
 echo "URLs de los túneles:"
-cat logs/tunnel_*.log | grep -E "https://.*?trycloudflare.com" 2>/dev/null || echo "Esperando URLs..."
+curl -s http://localhost/tunnels | python3 -m json.tool
 
 # Mostrar logs en tiempo real
 echo "Mostrando logs en tiempo real (Ctrl+C para salir):"
