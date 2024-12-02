@@ -8,9 +8,8 @@
     "migrate": "node src/database/migrations/runMigrations.js",
     "migrate:down": "node -e 'require(\"./src/database/migrations/001_initial_schema.js\").down()'",
     "start": "node src/app.js",
-    "start-all": "sudo chmod +x start-instances.sh && sudo ./start-instances.sh",
-    "stop-all": "sudo chmod +x stop-services.sh && sudo ./stop-services.sh",
-    "logs": "screen -r clientfy-bots"
+    "start-all": "chmod +x start-instances.sh && ./start-instances.sh",
+    "stop-all": "chmod +x stop-services.sh && ./stop-services.sh"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
