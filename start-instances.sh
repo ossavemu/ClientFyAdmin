@@ -39,7 +39,7 @@ screen -dmS $SESSION_NAME bash -c "
         sleep 5
         
         # Verificar si el bot inició correctamente
-        local port=\$((3007 + instance))
+        local port=\$((3008 + (instance - 1)))
         if curl -s \"http://localhost:\$port/health\" >/dev/null; then
             echo \"✅ Bot \$instance iniciado correctamente en puerto \$port\" | tee -a logs/bot\$instance.log
         else
