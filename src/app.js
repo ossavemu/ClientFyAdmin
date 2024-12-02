@@ -72,15 +72,20 @@ const log = (message, error = false) => {
 
 const main = async () => {
   try {
-    log('Iniciando aplicación...');
-
+    log(`Iniciando Bot ${INSTANCE_ID} en puerto ${PORT}...`);
+    
     // Crear servidor Express para el bot
     const app = express();
-
+    
     // Agregar middleware para logging
     app.use((req, res, next) => {
       log(`${req.method} ${req.url}`);
       next();
+    });
+
+    // Agregar ruta de health check primero
+    app.get('/health', (req, res) => {
+      res.send('OK');
     });
 
     // Iniciar Express en el puerto del bot
@@ -88,26 +93,28 @@ const main = async () => {
       try {
         const server = app
           .listen(PORT, '0.0.0.0', () => {
-            log(`Servidor bot iniciado en puerto ${PORT}`);
+            log(`Bot ${INSTANCE_ID} escuchando en puerto ${PORT}`);
             resolve(server);
           })
           .on('error', (err) => {
-            log(`Error iniciando servidor Express: ${err.message}`, true);
+            log(`Error iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
             reject(err);
           });
       } catch (err) {
-        log(`Error crítico iniciando Express: ${err.message}`, true);
+        log(`Error crítico iniciando Bot ${INSTANCE_ID}: ${err.message}`, true);
         reject(err);
       }
     });
 
     // Si es la primera instancia, crear el proxy en puerto 80
     if (INSTANCE_ID === '1') {
+      log('Iniciando proxy en puerto 80...');
       const proxyApp = express();
 
       // Configurar proxy para cada bot
       for (let i = 1; i <= 4; i++) {
         const botPort = BASE_PORT + (i - 1);
+        log(`Configurando proxy para Bot ${i} en puerto ${botPort}`);
         proxyApp.use(
           `/bot${i}`,
           createProxyMiddleware({
@@ -123,7 +130,7 @@ const main = async () => {
       // Iniciar proxy en puerto 80
       proxyApp
         .listen(80, '0.0.0.0', () => {
-          log('Proxy iniciado en puerto 80');
+          log('Proxy iniciado exitosamente en puerto 80');
         })
         .on('error', (err) => {
           log(`Error iniciando proxy: ${err.message}`, true);
