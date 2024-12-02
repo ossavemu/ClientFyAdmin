@@ -8,27 +8,23 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Asegurar que el usuario actual sea el propietario de los directorios
 if [ ! -d logs ]; then
-    sudo mkdir -p logs
-    sudo chown -R $USER:$USER logs
+    mkdir -p logs
 fi
 
 if [ ! -d data ]; then
-    sudo mkdir -p data
-    sudo chown -R $USER:$USER data
+    mkdir -p data
 fi
 
 if [ ! -d sessions ]; then
-    sudo mkdir -p sessions
-    sudo chown -R $USER:$USER sessions
+    mkdir -p sessions
 fi
 
 # Detener servicios previos
 echo "Deteniendo servicios previos..."
-sudo bash "$SCRIPT_DIR/stop-services.sh"
+bash "$SCRIPT_DIR/stop-services.sh"
 
 # Limpiar logs antiguos
-sudo rm -f logs/bot*.log
-sudo chown -R $USER:$USER logs/
+rm -f logs/bot*.log
 
 # Crear nueva sesión de screen
 screen -dmS $SESSION_NAME bash -c "
