@@ -8,6 +8,9 @@ pkill -f "node src/app.js"
 screen -wipe >/dev/null 2>&1
 screen -ls | grep -q "clientfy-bots" && screen -S clientfy-bots -X quit
 
+# Esperar a que todo se detenga
+sleep 3
+
 # Iniciar nueva sesión de screen con logging
 screen -L -S clientfy-bots -dm bash -c "
     cd \"$PWD\"
@@ -16,14 +19,20 @@ screen -L -S clientfy-bots -dm bash -c "
     for i in {1..4}; do
         export INSTANCE_ID=\$i
         echo \"Iniciando Bot \$i...\"
-        pnpm start > logs/bot\$i.log 2>&1 &
-        sleep 2
+        NODE_ENV=production pnpm start > logs/bot\$i.log 2>&1 &
+        sleep 5  # Dar más tiempo entre cada bot
     done
     
-    # Mantener la sesión viva
+    # Esperar a que todos los bots inicien
+    sleep 5
+    
+    # Mostrar logs
     echo 'Presiona Ctrl+A D para desconectar sin cerrar la sesión'
     tail -f logs/bot*.log
 "
+
+# Esperar a que los bots inicien
+sleep 5
 
 echo "Bots iniciados en puertos 3008-3011"
 echo "Para ver los logs: screen -r clientfy-bots"
