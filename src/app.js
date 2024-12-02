@@ -72,6 +72,32 @@ const log = (message, error = false) => {
 const main = async () => {
   try {
     log('Iniciando aplicación...');
+
+    // Crear servidor Express primero
+    const app = express();
+
+    // Iniciar Express antes que nada
+    const expressServer = await new Promise((resolve, reject) => {
+      const server = app
+        .listen(80, '0.0.0.0', () => {
+          log('Servidor QR iniciado en puerto 80');
+          resolve(server);
+        })
+        .on('error', (err) => {
+          if (err.code === 'EACCES') {
+            log(
+              'Error: Se requieren privilegios de root para el puerto 80',
+              true
+            );
+          } else if (err.code === 'EADDRINUSE') {
+            log('Error: El puerto 80 ya está en uso', true);
+          } else {
+            log(`Error iniciando servidor Express: ${err.message}`, true);
+          }
+          reject(err);
+        });
+    });
+
     await db.testConnection();
     log('Conexión a base de datos establecida');
 
@@ -89,9 +115,6 @@ const main = async () => {
     }
 
     const adapterDB = new Database();
-
-    // Crear servidor Express
-    const app = express();
 
     const { httpServer, bot } = await createBot({
       flow: adapterFlow,
@@ -123,6 +146,11 @@ const main = async () => {
       }
     });
 
+    // Agregar ruta de health check
+    app.get('/health', (req, res) => {
+      res.send('OK');
+    });
+
     // Manejar eventos de conexión
     bot.on('ready', () => {
       updateBotState({
@@ -149,11 +177,6 @@ const main = async () => {
     await updateBotState({
       paired: false,
       status: 'starting',
-    });
-
-    // Iniciar servidor Express
-    app.listen(80, '0.0.0.0', () => {
-      log('Servidor QR iniciado en puerto 80');
     });
 
     httpServer(PORT);
