@@ -8,10 +8,9 @@
     "migrate": "node src/database/migrations/runMigrations.js",
     "migrate:down": "node -e 'require(\"./src/database/migrations/001_initial_schema.js\").down()'",
     "start": "node src/app.js",
-    "start-all": "sudo chmod +x start-tunnels.sh && sudo ./start-tunnels.sh",
+    "start-all": "sudo chmod +x start-instances.sh && sudo ./start-instances.sh",
     "stop-all": "sudo chmod +x stop-services.sh && sudo ./stop-services.sh",
-    "logs": "screen -r clientfy-bots",
-    "urls": "cat logs/tunnel_*.log | grep -E \"https://.*?trycloudflare.com\""
+    "logs": "screen -r clientfy-bots"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
@@ -34,7 +33,8 @@
     "openai": "4.68.4",
     "resend": "^4.0.1",
     "typescript": "5.6.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "express": "^4.18.2"
   },
   "devDependencies": {
     "eslint": "^9.15.0",

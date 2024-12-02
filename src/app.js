@@ -1,4 +1,5 @@
 import { createBot, MemoryDB as Database } from '@builderbot/bot';
+import express from 'express';
 import fs from 'fs/promises';
 import { createServer } from 'net';
 import path from 'path';
@@ -89,10 +90,8 @@ const main = async () => {
 
     const adapterDB = new Database();
 
-    const availablePort = await findAvailablePort(PORT);
-    if (availablePort !== PORT) {
-      log(`Puerto ${PORT} en uso, usando puerto alternativo ${availablePort}`);
-    }
+    // Crear servidor Express
+    const app = express();
 
     const { httpServer, bot } = await createBot({
       flow: adapterFlow,
@@ -101,6 +100,27 @@ const main = async () => {
       settings: {
         host: '0.0.0.0',
       },
+    });
+
+    // Configurar ruta para el QR
+    app.get(`/bot${INSTANCE_ID}`, (req, res) => {
+      const qrCode = bot.getQRCode();
+      if (qrCode) {
+        res.send(`
+          <html>
+            <head>
+              <title>Bot ${INSTANCE_ID} QR Code</title>
+              <meta http-equiv="refresh" content="10">
+            </head>
+            <body>
+              <h1>Bot ${INSTANCE_ID} QR Code</h1>
+              <img src="${qrCode}" alt="QR Code">
+            </body>
+          </html>
+        `);
+      } else {
+        res.send(`Bot ${INSTANCE_ID} ya está conectado`);
+      }
     });
 
     // Manejar eventos de conexión
@@ -131,8 +151,13 @@ const main = async () => {
       status: 'starting',
     });
 
-    httpServer(availablePort);
-    log(`Servidor iniciado en puerto ${availablePort}`);
+    // Iniciar servidor Express
+    app.listen(80, '0.0.0.0', () => {
+      log('Servidor QR iniciado en puerto 80');
+    });
+
+    httpServer(PORT);
+    log(`Servidor bot iniciado en puerto ${PORT}`);
 
     reminder(adapterProvider);
     log('Servicio de recordatorios iniciado');

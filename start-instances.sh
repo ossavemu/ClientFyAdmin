@@ -11,9 +11,6 @@ if [ $? -eq 0 ]; then
     sleep 2
 fi
 
-# Limpiar logs antiguos
-rm -f logs/tunnel_*.log
-
 # Crear nueva sesión de screen
 screen -dmS $SESSION_NAME bash -c '
     cd "$(dirname "$0")"
@@ -24,24 +21,15 @@ screen -dmS $SESSION_NAME bash -c '
     export INSTANCE_ID=3 && pnpm start &
     export INSTANCE_ID=4 && pnpm start &
 
-    # Esperar un momento para que las instancias inicien
-    sleep 10
-
-    # Iniciar los túneles y mostrar las URLs
-    ./create-tunnels.sh
-
-    # Para ver las URLs en cualquier momento
-    echo "Para ver las URLs de los túneles ejecuta:"
-    echo "grep -h \"https://\" logs/tunnel_*.log"
-
     # Mantener el script ejecutándose
     wait
 '
 
 echo "Sesión iniciada en background. Para ver los logs:"
 echo "screen -r $SESSION_NAME"
-
-# Esperar un momento y mostrar las URLs
-sleep 15
-echo "URLs de los túneles:"
-grep -h "https://" logs/tunnel_*.log 2>/dev/null 
+echo ""
+echo "Los QR codes estarán disponibles en:"
+echo "http://localhost/bot1"
+echo "http://localhost/bot2"
+echo "http://localhost/bot3"
+echo "http://localhost/bot4" 
