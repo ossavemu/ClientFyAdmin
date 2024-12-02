@@ -1,5 +1,7 @@
 import { createBot, MemoryDB as Database } from '@builderbot/bot';
+import fs from 'fs/promises';
 import { createServer } from 'net';
+import path from 'path';
 import { config } from './config/index.js';
 import { db } from './database/connection.js';
 import { providerBaileys, providerMeta } from './provider/index.js';
@@ -10,6 +12,32 @@ import templates from './templates/index.js';
 const BASE_PORT = 3008;
 const INSTANCE_ID = process.env.INSTANCE_ID || '1';
 const PORT = BASE_PORT + (parseInt(INSTANCE_ID) - 1);
+
+// Función para actualizar el estado en el archivo JSON
+const updateBotState = async (state) => {
+  try {
+    const stateFile = path.join(process.cwd(), '..', 'data', 'bot_states.json');
+    let states = {};
+
+    try {
+      const data = await fs.readFile(stateFile, 'utf8');
+      states = JSON.parse(data);
+    } catch (error) {
+      // Si el archivo no existe o está corrupto, empezamos con un objeto vacío
+    }
+
+    states[INSTANCE_ID] = {
+      ...state,
+      lastUpdate: new Date().toISOString(),
+      port: PORT,
+    };
+
+    await fs.mkdir(path.dirname(stateFile), { recursive: true });
+    await fs.writeFile(stateFile, JSON.stringify(states, null, 2));
+  } catch (error) {
+    console.error('Error actualizando estado:', error);
+  }
+};
 
 // Función para encontrar un puerto disponible
 const findAvailablePort = async (startPort) => {
@@ -66,13 +94,41 @@ const main = async () => {
       log(`Puerto ${PORT} en uso, usando puerto alternativo ${availablePort}`);
     }
 
-    const { httpServer } = await createBot({
+    const { httpServer, bot } = await createBot({
       flow: adapterFlow,
       provider: adapterProvider,
       database: adapterDB,
       settings: {
         host: '0.0.0.0',
       },
+    });
+
+    // Manejar eventos de conexión
+    bot.on('ready', () => {
+      updateBotState({
+        paired: true,
+        status: 'connected',
+      });
+    });
+
+    bot.on('require_action', () => {
+      updateBotState({
+        paired: false,
+        status: 'waiting_qr',
+      });
+    });
+
+    bot.on('message', () => {
+      updateBotState({
+        paired: true,
+        status: 'connected',
+      });
+    });
+
+    // Inicializar estado como desconectado
+    await updateBotState({
+      paired: false,
+      status: 'starting',
     });
 
     httpServer(availablePort);

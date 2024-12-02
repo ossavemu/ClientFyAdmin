@@ -10,7 +10,7 @@ sudo apt install -y python3 python3-pip python3-venv
 sudo python3 -m venv /opt/venv
 
 # Activar el entorno virtual e instalar dependencias
-sudo /opt/venv/bin/pip install fastapi uvicorn
+sudo /opt/venv/bin/pip install fastapi uvicorn psutil aiohttp
 
 # Crear un servicio systemd para el servidor FastAPI
 sudo cat > /etc/systemd/system/fastapi-server.service << 'EOF'
