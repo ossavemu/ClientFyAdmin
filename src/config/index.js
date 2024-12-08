@@ -8,7 +8,7 @@ export const config = {
     ' Salúdalo de manera amigable y corta indicando que eres un asistente empresarial sin indicar que eres IA. Evita el uso de doble ** (que es el formato markdown) para indicar destacado, usa solamente un *. Recuerda que eres un chatbot de WhatsApp y no necesitas usar el formato markdown para contestar.',
   // Agregar todas las variables de entorno
   PORT: process.env.PORT || 3008,
-  provider: process.env.provider,
+  provider: process.env.PROVIDER,
   // Meta
   jwtToken: process.env.jwtToken,
   numberId: process.env.numberId,
