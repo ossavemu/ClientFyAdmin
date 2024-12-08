@@ -1,6 +1,9 @@
 # build output
 dist/
 
+# Credenciales y archivos sensibles
+clientfycalendar.json
+
 # generated types
 .astro/
 
