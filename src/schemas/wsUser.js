@@ -3,9 +3,19 @@ import { z } from 'zod';
 export const wsUserSchema = z.object({
   phone_number: z
     .string()
-    .min(10, 'El número de teléfono debe tener al menos 10 dígitos')
-    .max(20, 'El número de teléfono no puede exceder 20 caracteres')
-    .regex(/^\+?[\d\s-]+$/, 'Formato de número de teléfono inválido'),
+    .transform((val) => {
+      // Limpiar y formatear el número
+      const cleaned = val.replace(/\D/g, '');
+      return cleaned.startsWith('57') ? cleaned : `57${cleaned}`;
+    })
+    .refine(
+      (val) => val.length >= 12,
+      'El número de teléfono debe tener al menos 12 dígitos (incluyendo el prefijo 57)'
+    )
+    .refine(
+      (val) => /^57[0-9]{10,}$/.test(val),
+      'El número debe comenzar con 57 seguido de al menos 10 dígitos'
+    ),
 
   name: z
     .string()

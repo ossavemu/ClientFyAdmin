@@ -1,12 +1,45 @@
 import { google } from 'googleapis';
 
-const appEmail = 'clientfy0@gmail.com';
+import { getCalendarCredentials } from '../utils/getCalendarCredentials.js';
 
-const auth = new google.auth.GoogleAuth({
-  keyFile: './clientfycalendar.json',
-  scopes: ['https://www.googleapis.com/auth/calendar'],
-  subject: appEmail,
-});
+// Función para inicializar la autenticación
+async function initializeAuth() {
+  try {
+    const credentials = await getCalendarCredentials();
+
+    console.log(credentials)
+
+    // Verificar que todos los campos necesarios estén presentes
+    const requiredFields = [
+      'client_email',
+      'private_key',
+      'project_id',
+      'client_id',
+    ];
+
+    for (const field of requiredFields) {
+      if (!credentials[field]) {
+        throw new Error(
+          `Las credenciales no contienen el campo requerido: ${field}`
+        );
+      }
+    }
+
+    // Asegurarse de que la clave privada esté en el formato correcto
+    if (credentials.private_key.includes('\\n')) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
+
+    return new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/calendar'],
+      subject: credentials.client_email, // Usar el client_email de las credenciales
+    });
+  } catch (error) {
+    console.error('Error al inicializar la autenticación:', error);
+    throw new Error(`Error de autenticación: ${error.message}`);
+  }
+}
 
 const calendar = google.calendar({
   version: 'v3',
@@ -34,6 +67,7 @@ export async function createEvent(
   duration = standardDuration
 ) {
   try {
+    const auth = await initializeAuth();
     const authClient = await auth.getClient();
 
     google.options({ auth: authClient });
@@ -90,6 +124,7 @@ export async function createEvent(
 
 export async function listAvailableSlots(startDate = new Date(), endDate) {
   try {
+    const auth = await initializeAuth();
     const authClient = await auth.getClient();
 
     google.options({ auth: authClient });

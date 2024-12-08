@@ -1,4 +1,5 @@
 import { addKeyword, EVENTS } from '@builderbot/bot';
+import { config } from '../config/index.js';
 import { chat } from '../services/chatgpt.js';
 import { typing } from '../services/typing.js';
 import { wsUserService } from '../services/wsUserService.js';
@@ -60,7 +61,7 @@ const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(async (ctx, ctxFn) => {
 
     await typing(1, { ctx, ctxFn });
 
-    const response = await chat(ctx.body, ctx.name, thread);
+    const response = await chat(ctx.body, config.numberId, ctx.name, thread);
     await ctxFn.state.update({ thread: response.thread });
     return ctxFn.endFlow(response.response);
   } catch (error) {

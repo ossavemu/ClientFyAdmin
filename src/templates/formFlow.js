@@ -1,6 +1,6 @@
 import { addKeyword, EVENTS } from '@builderbot/bot';
-import { getEmail } from '../services/getEmail.js';
 import { typing } from '../services/typing.js';
+import { getEmail } from '../utils/getEmail.js';
 import { processVoiceOrText } from '../utils/processVoiceOrText.js';
 import { eventCreationFlow } from './eventCreationFlow.js';
 

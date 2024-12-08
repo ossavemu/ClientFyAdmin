@@ -1,5 +1,5 @@
-import { isValidEmail } from '../utils/email.js';
-import { typing } from './typing.js';
+import { typing } from '../services/typing.js';
+import { isValidEmail } from './email.js';
 
 export const getEmail = async (ctx, ctxFn) => {
   const email = ctx.body.trim().toLowerCase();

@@ -1,9 +1,10 @@
 import { createBot, MemoryDB as Database } from '@builderbot/bot';
 import { config } from './config/index.js';
+import { db } from './database/connection.js';
 import { providerBaileys, providerMeta } from './provider/index.js';
+import { assistantService } from './services/assistantService.js';
 import { reminder } from './services/reminder.js';
 import templates from './templates/index.js';
-import { db } from './database/connection.js';
 
 const PORT = config.PORT;
 
@@ -22,16 +23,37 @@ const main = async () => {
 
     const adapterFlow = templates;
     let adapterProvider;
+    let botNumber;
 
     if (config.provider === 'meta') {
       adapterProvider = providerMeta;
-      log('Usando provider Meta');
+      botNumber = config.numberId;
+
+      if (!botNumber) {
+        throw new Error('ERROR: numberId no está configurado en .env');
+      }
+
+      log(`Usando provider Meta (${botNumber})`);
     } else if (config.provider === 'baileys') {
       adapterProvider = providerBaileys;
-      log('Usando provider Baileys');
+      botNumber = config.P_NUMBER;
+
+      if (!botNumber) {
+        throw new Error('ERROR: P_NUMBER no está configurado en .env');
+      }
+
+      log(`Usando provider Baileys (${botNumber})`);
     } else {
       throw new Error('ERROR: Falta agregar un provider al .env');
     }
+
+    // Validar formato del número antes de registrarlo
+    if (!botNumber.match(/^\d+$/)) {
+      throw new Error(`ERROR: Número de bot inválido: ${botNumber}`);
+    }
+
+    await assistantService.registerBotNumber(botNumber, config.provider);
+    log('Bot registrado y configurado correctamente');
 
     const adapterDB = new Database();
 
