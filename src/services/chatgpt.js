@@ -36,6 +36,7 @@ export const chat = async (
 ) => {
   try {
     if (!botNumber) {
+      console.error('Error: botNumber es requerido pero es undefined/null');
       throw new Error('El número de bot es requerido');
     }
 
@@ -43,7 +44,9 @@ export const chat = async (
       'Iniciando chat con bot número:',
       botNumber,
       'usuario:',
-      userName
+      userName,
+      'provider:',
+      config.provider
     );
     const openai = new OpenAI({ apiKey: openaiApiKey });
 

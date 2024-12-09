@@ -65,6 +65,13 @@ const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(async (ctx, ctxFn) => {
     const botNumber =
       config.provider === 'meta' ? config.numberId : config.P_NUMBER;
 
+    if (!botNumber) {
+      console.error('Error: botNumber no está definido');
+      return ctxFn.endFlow(
+        'Lo siento, hay un problema con la configuración del bot. Por favor, contacta al administrador.'
+      );
+    }
+
     const response = await chat(ctx.body, botNumber, ctx.name, thread);
     await ctxFn.state.update({ thread: response.thread });
     return ctxFn.endFlow(response.response);

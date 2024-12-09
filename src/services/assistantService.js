@@ -9,33 +9,39 @@ const openai = new OpenAI({
 // Función para formatear el número de teléfono según el provider
 const formatPhoneNumber = (phone, provider = 'meta') => {
   if (!phone) {
+    console.error('Error: Número de teléfono inválido:', phone);
     throw new Error('El número de teléfono no puede ser undefined o null');
   }
 
   console.log('Número original:', phone);
   console.log('Provider:', provider);
 
-  const cleaned = phone.toString().replace(/\D/g, '');
-  console.log('Número limpio:', cleaned);
+  try {
+    const cleaned = phone.toString().replace(/\D/g, '');
+    console.log('Número limpio:', cleaned);
 
-  // Meta usa IDs directamente, no necesita prefijo
-  if (provider === 'meta') {
-    return cleaned;
+    // Meta usa IDs directamente, no necesita prefijo
+    if (provider === 'meta') {
+      return cleaned;
+    }
+
+    // Para otros providers (como Baileys) agregamos el prefijo 57
+    const formatted = cleaned.startsWith('57') ? cleaned : `57${cleaned}`;
+    console.log('Número formateado:', formatted);
+
+    // Validar longitud
+    if (formatted.length < 12) {
+      console.error('Error: Longitud inválida:', formatted.length);
+      throw new Error(
+        `Número de teléfono inválido: longitud ${formatted.length}, se requieren al menos 12 dígitos`
+      );
+    }
+
+    return formatted;
+  } catch (error) {
+    console.error('Error al formatear número:', error);
+    throw new Error(`Error al formatear número: ${error.message}`);
   }
-
-  // Para otros providers (como Baileys) agregamos el prefijo 57
-  const formatted = cleaned.startsWith('57') ? cleaned : `57${cleaned}`;
-  console.log('Número formateado:', formatted);
-
-  // Validar longitud
-  if (formatted.length < 12) {
-    console.log('Longitud inválida:', formatted.length);
-    throw new Error(
-      `Número de teléfono inválido: longitud ${formatted.length}, se requieren al menos 12 dígitos`
-    );
-  }
-
-  return formatted;
 };
 
 export const assistantService = {
