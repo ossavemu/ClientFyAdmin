@@ -2,18 +2,31 @@ import { config } from '../config/index.js';
 
 export const getPrompt = async (botNumber) => {
   try {
-    // Limpiar el número de cualquier prefijo existente
-    const cleanNumber = botNumber.replace(/^(52|57)/, '');
+    console.log('🔍 Iniciando fetch de prompt...');
+    console.log('📞 Número original:', botNumber);
 
-    // Determinar el país basado en el prefijo original
-    let country = 'CO'; // Por defecto Colombia
-    if (botNumber.startsWith('52')) {
-      country = 'MX';
-    } else if (botNumber.startsWith('57')) {
-      country = 'CO';
+    // Validar el formato del número
+    if (!botNumber) {
+      throw new Error('El número del bot es undefined');
     }
 
-    console.log('🔍 País detectado:', country);
+    // Determinar el país basado en el prefijo
+    let country;
+    let cleanNumber;
+
+    if (botNumber.startsWith('57')) {
+      country = 'CO';
+      cleanNumber = botNumber.replace(/^57/, '');
+    } else if (botNumber.startsWith('52')) {
+      country = 'MX';
+      cleanNumber = botNumber.replace(/^52/, '');
+    } else {
+      // Si no tiene prefijo, asumimos que es Colombia
+      country = 'CO';
+      cleanNumber = botNumber;
+    }
+
+    console.log('🌍 País detectado:', country);
     console.log('📱 Número limpio:', cleanNumber);
 
     const url = `${config.prompt_api_url}/${cleanNumber}`;

@@ -21,34 +21,33 @@ const formatPhoneNumber = (phone, provider = 'meta') => {
     const cleaned = phone.toString().replace(/\D/g, '');
     console.log('Número limpio:', cleaned);
 
-    // Si ya empieza con 52 o 57, usamos el número tal cual está
-    if (cleaned.startsWith('52') || cleaned.startsWith('57')) {
-      console.log('Número ya tiene prefijo de país, usando:', cleaned);
+    // Si ya tiene un prefijo válido (57 o 52), verificamos que no tenga duplicados
+    if (cleaned.match(/^(57|52)/)) {
+      // Verificar que no haya prefijos duplicados
+      const withoutPrefix = cleaned.replace(/^(57|52)/, '');
+      if (withoutPrefix.startsWith('57') || withoutPrefix.startsWith('52')) {
+        // Si hay un prefijo duplicado, lo removemos
+        console.log('Detectado prefijo duplicado, corrigiendo...');
+        return `57${withoutPrefix.replace(/^(57|52)/, '')}`;
+      }
       return cleaned;
     }
 
-    // Si no tiene prefijo, determinamos el país basado en la longitud y otros factores
-    let formatted;
-    if (cleaned.length === 10) {
-      // Números sin prefijo de país
-      if (provider === 'meta') {
-        return cleaned; // Meta usa números sin prefijo
-      } else {
-        // Para otros providers, agregamos el prefijo basado en el país
-        formatted = `57${cleaned}`; // Por defecto asumimos Colombia
-      }
-    } else {
-      // Si el número ya tiene más de 10 dígitos pero no empieza con prefijo conocido
+    // Si no tiene prefijo, agregamos 57 (Colombia)
+    const formatted = `57${cleaned}`;
+    console.log('Número formateado:', formatted);
+
+    // Validar longitud final
+    if (formatted.length !== 12) {
       throw new Error(
-        `Formato de número inválido: ${cleaned}. Debe tener 10 dígitos o empezar con 52/57`
+        `Número de teléfono inválido: longitud ${formatted.length}, se requieren 12 dígitos`
       );
     }
 
-    console.log('Número formateado:', formatted);
     return formatted;
   } catch (error) {
     console.error('Error al formatear número:', error);
-    throw new Error(`Error al formatear número: ${error.message}`);
+    throw error;
   }
 };
 
