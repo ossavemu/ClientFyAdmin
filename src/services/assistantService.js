@@ -7,8 +7,16 @@ const openai = new OpenAI({
 });
 
 // Función para formatear el número de teléfono según el provider
-const formatPhoneNumber = (phone, provider) => {
+const formatPhoneNumber = (phone, provider = 'meta') => {
+  if (!phone) {
+    throw new Error('El número de teléfono no puede ser undefined o null');
+  }
+
+  console.log('Número original:', phone);
+  console.log('Provider:', provider);
+
   const cleaned = phone.toString().replace(/\D/g, '');
+  console.log('Número limpio:', cleaned);
 
   // Meta usa IDs directamente, no necesita prefijo
   if (provider === 'meta') {
@@ -16,7 +24,18 @@ const formatPhoneNumber = (phone, provider) => {
   }
 
   // Para otros providers (como Baileys) agregamos el prefijo 57
-  return cleaned.startsWith('57') ? cleaned : `57${cleaned}`;
+  const formatted = cleaned.startsWith('57') ? cleaned : `57${cleaned}`;
+  console.log('Número formateado:', formatted);
+
+  // Validar longitud
+  if (formatted.length < 12) {
+    console.log('Longitud inválida:', formatted.length);
+    throw new Error(
+      `Número de teléfono inválido: longitud ${formatted.length}, se requieren al menos 12 dígitos`
+    );
+  }
+
+  return formatted;
 };
 
 export const assistantService = {

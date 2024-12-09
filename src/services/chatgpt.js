@@ -35,6 +35,10 @@ export const chat = async (
   thread = null
 ) => {
   try {
+    if (!botNumber) {
+      throw new Error('El número de bot es requerido');
+    }
+
     console.log(
       'Iniciando chat con bot número:',
       botNumber,

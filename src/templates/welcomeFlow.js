@@ -61,7 +61,11 @@ const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(async (ctx, ctxFn) => {
 
     await typing(1, { ctx, ctxFn });
 
-    const response = await chat(ctx.body, config.numberId, ctx.name, thread);
+    // Determinar qué número de bot usar basado en el provider
+    const botNumber =
+      config.provider === 'meta' ? config.numberId : config.P_NUMBER;
+
+    const response = await chat(ctx.body, botNumber, ctx.name, thread);
     await ctxFn.state.update({ thread: response.thread });
     return ctxFn.endFlow(response.response);
   } catch (error) {
