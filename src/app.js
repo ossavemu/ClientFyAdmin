@@ -52,8 +52,9 @@ const main = async () => {
       throw new Error(`ERROR: Número de bot inválido: ${botNumber}`);
     }
 
+    log('Registrando bot...');
     await assistantService.registerBotNumber(botNumber, config.provider);
-    log('Bot registrado y configurado correctamente');
+    log(`Bot registrado: ${botNumber} (${config.provider})`);
 
     const adapterDB = new Database();
 

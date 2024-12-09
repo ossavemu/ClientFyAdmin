@@ -17,26 +17,34 @@ const formatPhoneNumber = (phone, provider = 'meta') => {
   console.log('Provider:', provider);
 
   try {
+    // Primero limpiamos el número de cualquier caracter no numérico
     const cleaned = phone.toString().replace(/\D/g, '');
     console.log('Número limpio:', cleaned);
 
-    // Meta usa IDs directamente, no necesita prefijo
-    if (provider === 'meta') {
+    // Si ya empieza con 52 o 57, usamos el número tal cual está
+    if (cleaned.startsWith('52') || cleaned.startsWith('57')) {
+      console.log('Número ya tiene prefijo de país, usando:', cleaned);
       return cleaned;
     }
 
-    // Para otros providers (como Baileys) agregamos el prefijo 57
-    const formatted = cleaned.startsWith('57') ? cleaned : `57${cleaned}`;
-    console.log('Número formateado:', formatted);
-
-    // Validar longitud
-    if (formatted.length < 12) {
-      console.error('Error: Longitud inválida:', formatted.length);
+    // Si no tiene prefijo, determinamos el país basado en la longitud y otros factores
+    let formatted;
+    if (cleaned.length === 10) {
+      // Números sin prefijo de país
+      if (provider === 'meta') {
+        return cleaned; // Meta usa números sin prefijo
+      } else {
+        // Para otros providers, agregamos el prefijo basado en el país
+        formatted = `57${cleaned}`; // Por defecto asumimos Colombia
+      }
+    } else {
+      // Si el número ya tiene más de 10 dígitos pero no empieza con prefijo conocido
       throw new Error(
-        `Número de teléfono inválido: longitud ${formatted.length}, se requieren al menos 12 dígitos`
+        `Formato de número inválido: ${cleaned}. Debe tener 10 dígitos o empezar con 52/57`
       );
     }
 
+    console.log('Número formateado:', formatted);
     return formatted;
   } catch (error) {
     console.error('Error al formatear número:', error);

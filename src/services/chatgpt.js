@@ -63,7 +63,10 @@ export const chat = async (
     }
 
     // Obtener el assistant_id para este bot
-    const assistantId = await assistantService.getOrCreateAssistant(botNumber);
+    const assistantId = await assistantService.getOrCreateAssistant(
+      botNumber,
+      config.provider
+    );
 
     // Agregar el mensaje del usuario al thread
     console.log('Agregando mensaje al thread...');

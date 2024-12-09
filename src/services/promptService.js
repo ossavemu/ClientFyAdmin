@@ -1,39 +1,42 @@
 import { config } from '../config/index.js';
 
-export const getPrompt = async (phoneNumber) => {
+export const getPrompt = async (botNumber) => {
   try {
-    // Determinar qué número usar basado en el provider
-    const numberToUse =
-      config.provider === 'baileys' ? config.P_NUMBER : phoneNumber;
+    // Limpiar el número de cualquier prefijo existente
+    const cleanNumber = botNumber.replace(/^(52|57)/, '');
 
-    console.log('🔍 Iniciando fetch de prompt...');
-    console.log('📞 Número original:', phoneNumber);
-    console.log('🤖 Provider:', config.provider);
-    console.log('📱 Número a usar:', numberToUse);
+    // Determinar el país basado en el prefijo original
+    let country = 'CO'; // Por defecto Colombia
+    if (botNumber.startsWith('52')) {
+      country = 'MX';
+    } else if (botNumber.startsWith('57')) {
+      country = 'CO';
+    }
 
-    // Construir la URL usando el número correcto
-    const url = `${config.prompt_api_url}/${numberToUse}`;
+    console.log('🔍 País detectado:', country);
+    console.log('📱 Número limpio:', cleanNumber);
+
+    const url = `${config.prompt_api_url}/${cleanNumber}`;
     console.log('🌐 URL:', url);
 
     const response = await fetch(url);
     console.log('📥 Status de respuesta:', response.status);
 
     if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
     console.log('📄 Datos recibidos:', JSON.stringify(data, null, 2));
 
-    // Asumiendo que la API devuelve el prompt en data.prompt
-    const prompt = data.prompt || '';
-    console.log('✨ Prompt obtenido:', prompt.substring(0, 100) + '...');
+    if (!data.prompt) {
+      throw new Error('No se encontró el prompt en la respuesta');
+    }
 
-    return prompt;
+    console.log('✨ Prompt obtenido:', data.prompt.substring(0, 50) + '...');
+    return data.prompt;
   } catch (error) {
-    console.error('❌ Error al obtener el prompt:', error);
-    console.error('Stack:', error.stack);
-    // Devolver un prompt por defecto en caso de error
-    return config.defaultPrompt || '';
+    console.error('Error obteniendo prompt:', error);
+    return config.default_prompt;
   }
 };
