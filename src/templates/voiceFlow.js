@@ -3,16 +3,27 @@ import { config } from '../config/index.js';
 import { chat } from '../services/chatgpt.js';
 import { typing } from '../services/typing.js';
 import { voice2text } from '../services/voicegpt.js';
+import { wsUserService } from '../services/wsUserService.js';
 import { downloadFile, downloadFileBaileys } from '../utils/downloader.js';
 import { removeFile } from '../utils/remover.js';
 import { dateFlow } from './dateFlow.js';
-import { wsUserService } from '../services/wsUserService.js';
 
 const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
   async (ctx, ctxFn) => {
     let filePath;
     try {
       const phoneNumber = ctx.from;
+
+      // Determinar qué número de bot usar basado en el provider
+      const botNumber =
+        config.provider === 'meta' ? config.numberId : config.P_NUMBER;
+
+      if (!botNumber) {
+        console.error('Error: botNumber no está definido');
+        return ctxFn.endFlow(
+          'Lo siento, hay un problema con la configuración del bot. Por favor, contacta al administrador.'
+        );
+      }
 
       // Registrar o actualizar usuario
       await wsUserService.createOrUpdateUser(phoneNumber, ctx.name);
@@ -52,7 +63,9 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
 
       const state = await ctxFn.state.getMyState();
       const thread = state?.thread ?? null;
-      const response = await chat(transcript, ctx.name, thread);
+
+      // Pasar el botNumber correctamente a la función chat
+      const response = await chat(transcript, botNumber, ctx.name, thread);
 
       await typing(1, { ctx, ctxFn });
       await ctxFn.state.update({ thread: response.thread });
