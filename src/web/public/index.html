@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel de Control - ChatBot</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+    <script src="/socket.io/socket.io.js"></script>
+  </head>
+  <body class="bg-gradient-to-br from-purple-600 to-blue-600 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+      <h1 class="text-4xl font-bold mb-8 text-center text-white">
+        Panel de Control ChatBot
+      </h1>
+
+      <div class="bg-white rounded-lg shadow-xl p-6 max-w-4xl mx-auto">
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead>
+              <tr class="border-b-2 border-gray-200">
+                <th
+                  class="px-6 py-3 text-left text-sm font-semibold text-gray-600"
+                >
+                  Usuario
+                </th>
+                <th
+                  class="px-6 py-3 text-left text-sm font-semibold text-gray-600"
+                >
+                  Número
+                </th>
+                <th
+                  class="px-6 py-3 text-center text-sm font-semibold text-gray-600"
+                >
+                  Estado
+                </th>
+                <th
+                  class="px-6 py-3 text-right text-sm font-semibold text-gray-600"
+                >
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody id="chatHistory">
+              <!-- El historial se cargará aquí dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para selección de tiempo -->
+    <div
+      id="muteModal"
+      class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+    >
+      <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+        <h2 class="text-xl font-bold mb-4">Seleccionar tiempo de silencio</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="setMuteTime(5)" class="btn-mute">5 minutos</button>
+          <button onclick="setMuteTime(10)" class="btn-mute">10 minutos</button>
+          <button onclick="setMuteTime(15)" class="btn-mute">15 minutos</button>
+          <button onclick="setMuteTime(30)" class="btn-mute">30 minutos</button>
+          <button onclick="setMuteTime(1440)" class="btn-mute col-span-2">
+            24 horas
+          </button>
+          <button onclick="closeModal()" class="btn-cancel col-span-2">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para quitar mute -->
+    <div
+      id="unmuteModal"
+      class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+    >
+      <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+        <h2 class="text-xl font-bold mb-4">Opciones de Desmuteo</h2>
+        <div class="space-y-4">
+          <button onclick="unmute(true, true)" class="w-full btn-mute">
+            Desmutear y enviar respuesta contextual
+          </button>
+          <button onclick="unmute(true, false)" class="w-full btn-mute">
+            Solo desmutear
+          </button>
+          <button onclick="closeUnmuteModal()" class="w-full btn-cancel">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .btn-mute {
+        @apply bg-purple-500 text-white py-2 px-4 rounded hover:bg-purple-600 transition-colors;
+      }
+      .btn-cancel {
+        @apply bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400 transition-colors;
+      }
+    </style>
+
+    <script>
+      const socket = io();
+      let selectedPhoneNumber = null;
+      const activeUsers = new Map();
+
+      // Cargar usuarios activos al inicio
+      async function loadActiveUsers() {
+        try {
+          const response = await fetch("/api/active-users");
+          const users = await response.json();
+
+          users.forEach((user) => {
+            activeUsers.set(user.phone_number, user);
+          });
+
+          updateUsersTable();
+        } catch (error) {
+          console.error("Error cargando usuarios activos:", error);
+        }
+      }
+
+      // Actualizar la tabla de usuarios
+      function updateUsersTable() {
+        const tbody = document.getElementById("chatHistory");
+        tbody.innerHTML = "";
+
+        if (activeUsers.size === 0) {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td colspan="4" class="px-6 py-4 text-sm text-gray-500 text-center">
+              Esperando usuarios...
+            </td>
+          `;
+          tbody.appendChild(row);
+          return;
+        }
+
+        activeUsers.forEach((user) => {
+          const row = document.createElement("tr");
+          row.className = "border-b border-gray-100 hover:bg-gray-50";
+
+          const isMuted = user.status === "muted";
+          const statusClass = isMuted
+            ? "bg-red-100 text-red-800"
+            : "bg-green-100 text-green-800";
+
+          row.innerHTML = `
+            <td class="px-6 py-4 text-sm text-gray-800">${user.user_name}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">${
+              user.phone_number
+            }</td>
+            <td class="px-6 py-4 text-center">
+              <span class="px-2 py-1 rounded-full text-xs ${statusClass}">
+                ${isMuted ? "Silenciado" : "Activo"}
+              </span>
+            </td>
+            <td class="px-6 py-4 text-right">
+              ${
+                isMuted
+                  ? `
+                <button onclick="showUnmuteModal('${user.phone_number}')" 
+                        class="px-4 py-2 text-sm rounded-full bg-green-500 text-white hover:bg-green-600">
+                  Quitar Silencio
+                </button>
+              `
+                  : `
+                <button onclick="showMuteModal('${user.phone_number}')" 
+                        class="px-4 py-2 text-sm rounded-full bg-purple-500 text-white hover:bg-purple-600">
+                  Silenciar
+                </button>
+              `
+              }
+            </td>
+          `;
+
+          tbody.appendChild(row);
+        });
+      }
+
+      // Escuchar nuevos usuarios
+      socket.on("newUser", (user) => {
+        activeUsers.set(user.phone_number, user);
+        updateUsersTable();
+      });
+
+      function showMuteModal(phoneNumber) {
+        selectedPhoneNumber = phoneNumber;
+        document.getElementById("muteModal").classList.remove("hidden");
+      }
+
+      function closeModal() {
+        document.getElementById("muteModal").classList.add("hidden");
+        selectedPhoneNumber = null;
+      }
+
+      function setMuteTime(minutes) {
+        if (!selectedPhoneNumber) return;
+        socket.emit("muteUser", { phoneNumber: selectedPhoneNumber });
+        document.getElementById("muteModal").classList.add("hidden");
+        selectedPhoneNumber = null;
+      }
+
+      function showUnmuteModal(phoneNumber) {
+        selectedPhoneNumber = phoneNumber;
+        document.getElementById("unmuteModal").classList.remove("hidden");
+      }
+
+      function closeUnmuteModal() {
+        document.getElementById("unmuteModal").classList.add("hidden");
+        selectedPhoneNumber = null;
+      }
+
+      function unmute(sendMessage, useContext) {
+        if (!selectedPhoneNumber) return;
+        socket.emit("unmuteUser", {
+          phoneNumber: selectedPhoneNumber,
+          sendMessage,
+          useContext,
+        });
+        closeUnmuteModal();
+      }
+
+      // Escuchar cambios de estado
+      socket.on("userStatusChanged", ({ phoneNumber, status }) => {
+        const user = activeUsers.get(phoneNumber);
+        if (user) {
+          user.status = status;
+          updateUsersTable();
+        }
+      });
+
+      // Cargar usuarios iniciales y actualizar cada 30 segundos
+      loadActiveUsers();
+      setInterval(loadActiveUsers, 30000);
+    </script>
+  </body>
+</html>

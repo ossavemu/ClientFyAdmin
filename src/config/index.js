@@ -14,6 +14,7 @@ Instrucciones:
 `,
   // Agregar todas las variables de entorno
   PORT: process.env.PORT || 3008,
+  WEB_PORT: process.env.WEB_PORT || 5432,
   provider: process.env.PROVIDER,
   // Meta
   jwtToken: process.env.jwtToken,

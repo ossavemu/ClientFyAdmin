@@ -5,12 +5,35 @@ import { chat } from "../services/chatgpt.js";
 import { imageService } from "../services/imageService.js";
 import { typing } from "../services/typing.js";
 import { wsUserService } from "../services/wsUserService.js";
+import { notifyNewUser } from "../web/server.js";
+import {
+  addMutedMessage,
+  isMuted,
+  registerMessageHandler,
+} from "../web/socket.js";
 import { dateFlow } from "./dateFlow.js";
 
 const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(async (ctx, ctxFn) => {
   try {
     const bodyText = ctx.body.toLowerCase().trim();
     const phoneNumber = ctx.from;
+
+    // Registrar el handler para enviar mensajes
+    registerMessageHandler(async (targetPhone, message) => {
+      if (targetPhone === phoneNumber) {
+        await typing(1, { ctx, ctxFn });
+        await ctxFn.flowDynamic(message);
+      }
+    });
+
+    // Verificar si el usuario está muteado usando el sistema en memoria
+    if (isMuted(phoneNumber)) {
+      // Guardar el mensaje para contexto futuro
+      const state = await ctxFn.state.getMyState();
+      addMutedMessage(phoneNumber, bodyText, state?.thread ?? null);
+      // Si está muteado, permitir que el mensaje pase sin respuesta del bot
+      return;
+    }
 
     // Registrar o actualizar usuario
     await wsUserService.createOrUpdateUser(phoneNumber, ctx.name);
@@ -156,6 +179,9 @@ const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(async (ctx, ctxFn) => {
       }
       return ctxFn.endFlow();
     }
+
+    // Notificar al panel web sobre el nuevo usuario
+    await notifyNewUser(phoneNumber, ctx.name);
 
     return ctxFn.endFlow(response.response);
   } catch (error) {

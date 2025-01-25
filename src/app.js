@@ -4,6 +4,7 @@ import { db } from "./database/connection.js";
 import { providerBaileys, providerMeta } from "./provider/index.js";
 import { reminder } from "./services/reminder.js";
 import templates from "./templates/index.js";
+import { webServer } from "./web/server.js";
 
 const PORT = config.PORT;
 
@@ -71,6 +72,11 @@ const main = async () => {
     log("Servicio de recordatorios iniciado");
 
     log("Bot y servicios iniciados correctamente");
+
+    // Iniciar servidor web usando el puerto configurado
+    webServer.listen(config.WEB_PORT, () => {
+      log(`Panel web iniciado en puerto ${config.WEB_PORT}`);
+    });
   } catch (error) {
     log(error.message, true);
     process.exit(1);
