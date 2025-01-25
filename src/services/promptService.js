@@ -1,55 +1,42 @@
-import { config } from '../config/index.js';
+import { config } from "../config/index.js";
+import { prompt as defaultPrompt } from "../prompt.js";
 
-export const getPrompt = async (botNumber) => {
+export const getPrompt = async (phoneNumber) => {
   try {
-    console.log('🔍 Iniciando fetch de prompt...');
-    console.log('📞 Número original:', botNumber);
+    console.log("🔍 Iniciando obtención de prompt...");
+    console.log("📞 Número original:", phoneNumber);
 
-    // Validar el formato del número
-    if (!botNumber) {
-      throw new Error('El número del bot es undefined');
-    }
+    // Limpiar el número
+    const cleaned = phoneNumber.toString().replace(/\D/g, "");
+    console.log("📱 Número limpio:", cleaned);
 
-    // Determinar el país basado en el prefijo
-    let country;
-    let cleanNumber;
+    // Detectar país (asumimos Colombia si empieza con 57)
+    const countryCode = cleaned.startsWith("57") ? "CO" : "UNKNOWN";
+    console.log("🌍 País detectado:", countryCode);
 
-    if (botNumber.startsWith('57')) {
-      country = 'CO';
-      cleanNumber = botNumber.replace(/^57/, '');
-    } else if (botNumber.startsWith('52')) {
-      country = 'MX';
-      cleanNumber = botNumber.replace(/^52/, '');
-    } else {
-      // Si no tiene prefijo, asumimos que es Colombia
-      country = 'CO';
-      cleanNumber = botNumber;
-    }
+    // Obtener el número sin prefijo de país
+    const numberWithoutPrefix = cleaned.startsWith("57")
+      ? cleaned.substring(2)
+      : cleaned;
+    console.log("📱 Número sin prefijo:", numberWithoutPrefix);
 
-    console.log('🌍 País detectado:', country);
-    console.log('📱 Número limpio:', cleanNumber);
+    // Construir URL
+    const url = `${config.prompt_api_url}/${numberWithoutPrefix}`;
+    console.log("🌐 URL:", url);
 
-    const url = `${config.prompt_api_url}/${cleanNumber}`;
-    console.log('🌐 URL:', url);
-
+    // Intentar obtener el prompt personalizado
     const response = await fetch(url);
-    console.log('📥 Status de respuesta:', response.status);
+    console.log("📥 Status de respuesta:", response.status);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('📄 Datos recibidos:', JSON.stringify(data, null, 2));
-
-    if (!data.prompt) {
-      throw new Error('No se encontró el prompt en la respuesta');
-    }
-
-    console.log('✨ Prompt obtenido:', data.prompt.substring(0, 50) + '...');
     return data.prompt;
   } catch (error) {
-    console.error('Error obteniendo prompt:', error);
-    return config.default_prompt;
+    console.log("Error obteniendo prompt:", error);
+    console.log("Usando prompt de respaldo con instrucciones de ventas");
+    return defaultPrompt;
   }
 };

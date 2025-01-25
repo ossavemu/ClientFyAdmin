@@ -1,60 +1,60 @@
-import { createBot, MemoryDB as Database } from '@builderbot/bot';
-import { config } from './config/index.js';
-import { db } from './database/connection.js';
-import { providerBaileys, providerMeta } from './provider/index.js';
-import { assistantService } from './services/assistantService.js';
-import { reminder } from './services/reminder.js';
-import templates from './templates/index.js';
+import { createBot, MemoryDB as Database } from "@builderbot/bot";
+import { config } from "./config/index.js";
+import { db } from "./database/connection.js";
+import { providerBaileys, providerMeta } from "./provider/index.js";
+import { reminder } from "./services/reminder.js";
+import templates from "./templates/index.js";
 
 const PORT = config.PORT;
 
 // Función para logs limpios
 const log = (message, error = false) => {
   const timestamp = new Date().toISOString();
-  const prefix = error ? '❌ ERROR:' : '✅ INFO:';
+  const prefix = error ? "❌ ERROR:" : "✅ INFO:";
   console.log(`[${timestamp}] ${prefix} ${message}`);
 };
 
 const main = async () => {
   try {
-    log('Iniciando aplicación...');
+    log("Iniciando aplicación...");
     await db.testConnection();
-    log('Conexión a base de datos establecida');
+    log("Conexión a base de datos establecida");
 
     const adapterFlow = templates;
     let adapterProvider;
     let botNumber;
 
-    if (config.provider === 'meta') {
+    if (config.provider === "meta") {
       adapterProvider = providerMeta;
       botNumber = config.numberId;
-
-      if (!botNumber) {
-        throw new Error('ERROR: numberId no está configurado en .env');
-      }
-
       log(`Usando provider Meta (${botNumber})`);
-    } else if (config.provider === 'baileys') {
+    } else if (config.provider === "baileys") {
       adapterProvider = providerBaileys;
       botNumber = config.P_NUMBER;
-
-      if (!botNumber) {
-        throw new Error('ERROR: P_NUMBER no está configurado en .env');
-      }
-
       log(`Usando provider Baileys (${botNumber})`);
     } else {
-      throw new Error('ERROR: Falta agregar un provider al .env');
+      throw new Error("ERROR: Provider no válido en .env");
     }
 
-    // Validar formato del número antes de registrarlo
-    if (!botNumber.match(/^\d+$/)) {
-      throw new Error(`ERROR: Número de bot inválido: ${botNumber}`);
-    }
+    // Registrar el bot en la base de datos
+    try {
+      log("Registrando bot en la base de datos...");
+      await db.sql`
+        INSERT INTO ws_users (phone_number, name)
+        VALUES (${botNumber}, ${`Bot ${config.provider}`})
+        ON CONFLICT (phone_number) DO NOTHING
+      `;
 
-    log('Registrando bot...');
-    await assistantService.registerBotNumber(botNumber, config.provider);
-    log(`Bot registrado: ${botNumber} (${config.provider})`);
+      await db.sql`
+        INSERT INTO bot_numbers (phone_number, provider)
+        VALUES (${botNumber}, ${config.provider})
+        ON CONFLICT (phone_number) DO NOTHING
+      `;
+      log(`Bot registrado exitosamente: ${botNumber} (${config.provider})`);
+    } catch (error) {
+      log(`Error registrando bot: ${error.message}`, true);
+      throw error;
+    }
 
     const adapterDB = new Database();
 
@@ -68,9 +68,9 @@ const main = async () => {
     log(`Servidor iniciado en puerto ${PORT}`);
 
     reminder(adapterProvider);
-    log('Servicio de recordatorios iniciado');
+    log("Servicio de recordatorios iniciado");
 
-    log('Bot y servicios iniciados correctamente');
+    log("Bot y servicios iniciados correctamente");
   } catch (error) {
     log(error.message, true);
     process.exit(1);

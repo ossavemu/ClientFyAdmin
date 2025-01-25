@@ -1,4 +1,4 @@
-import { db } from '../connection.js';
+import { db } from "../connection.js";
 
 export async function up() {
   try {
@@ -10,18 +10,24 @@ export async function up() {
       CREATE TABLE IF NOT EXISTS bot_numbers (
         phone_number VARCHAR(20) PRIMARY KEY,
         provider VARCHAR(20) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (phone_number) 
+          REFERENCES ws_users(phone_number) 
+          ON DELETE CASCADE
       )
     `;
 
     // Crear tabla de asistentes vinculados a bots
     await db.sql`
       CREATE TABLE IF NOT EXISTS bot_assistants (
-        id SERIAL PRIMARY KEY,
-        bot_number VARCHAR(20) REFERENCES bot_numbers(phone_number),
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bot_number VARCHAR(20),
         assistant_id VARCHAR(100) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_used DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (bot_number) 
+          REFERENCES bot_numbers(phone_number) 
+          ON DELETE CASCADE,
         UNIQUE(bot_number, assistant_id)
       )
     `;
@@ -37,20 +43,29 @@ export async function up() {
       ON bot_assistants(assistant_id)
     `;
 
-    console.log('Bot assistants tables migration completed successfully');
+    // Insertar bots predeterminados
+    await db.sql`
+      INSERT INTO bot_numbers (phone_number, provider)
+      VALUES 
+        ('000000000000', 'meta'),
+        ('bot_baileys', 'baileys')
+      ON CONFLICT (phone_number) DO NOTHING
+    `;
+
+    console.log("Bot assistants tables migration completed successfully");
   } catch (error) {
-    console.error('Bot assistants tables migration failed:', error);
+    console.error("Bot assistants tables migration failed:", error);
     throw error;
   }
 }
 
-export async function down() {
-  try {
+export const down = async (db) => {
+  const exists = await db.sql`
+    SELECT name FROM sqlite_master 
+    WHERE type='table' AND name='bot_assistants'
+  `;
+
+  if (exists.length > 0) {
     await db.sql`DROP TABLE IF EXISTS bot_assistants`;
-    await db.sql`DROP TABLE IF EXISTS bot_numbers`;
-    console.log('Bot assistants tables rollback completed successfully');
-  } catch (error) {
-    console.error('Bot assistants tables rollback failed:', error);
-    throw error;
   }
-}
+};

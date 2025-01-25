@@ -1,6 +1,6 @@
-import { db } from '../database/connection.js';
-import { agendaSchema } from '../schemas/agenda.js';
-import { historicSchema, wsUserSchema } from '../schemas/wsUser.js';
+import { db } from "../database/connection.js";
+import { agendaSchema } from "../schemas/agenda.js";
+import { historicSchema, wsUserSchema } from "../schemas/wsUser.js";
 
 export const wsUserService = {
   async createOrUpdateUser(phoneNumber, name) {
@@ -22,25 +22,45 @@ export const wsUserService = {
 
       return result[0];
     } catch (error) {
-      console.error('Error in createOrUpdateUser:', error);
+      console.error("Error in createOrUpdateUser:", error);
       throw error;
     }
   },
 
-  async logInteraction(phoneNumber, messageType, content) {
+  async logInteraction(
+    phoneNumber,
+    messageType,
+    content,
+    provider = "user",
+    botNumber = process.env.P_NUMBER
+  ) {
     try {
       const interactionData = historicSchema.parse({
         phone_number: phoneNumber,
+        bot_number: botNumber,
         message_type: messageType,
         message_content: content,
+        provider,
       });
 
       await db.sql`
-        INSERT INTO historic (phone_number, message_type, message_content)
-        VALUES (${interactionData.phone_number}, ${interactionData.message_type}, ${interactionData.message_content})
+        INSERT INTO historic (
+          phone_number, 
+          bot_number,
+          message_type, 
+          message_content, 
+          provider
+        )
+        VALUES (
+          ${interactionData.phone_number}, 
+          ${interactionData.bot_number},
+          ${interactionData.message_type}, 
+          ${interactionData.message_content}, 
+          ${interactionData.provider}
+        )
       `;
     } catch (error) {
-      console.error('Error in logInteraction:', error);
+      console.error("Error in logInteraction:", error);
       throw error;
     }
   },
@@ -49,7 +69,7 @@ export const wsUserService = {
     try {
       return await db.sql`SELECT * FROM hot_users`;
     } catch (error) {
-      console.error('Error in getHotUsers:', error);
+      console.error("Error in getHotUsers:", error);
       throw error;
     }
   },
@@ -84,7 +104,7 @@ export const wsUserService = {
 
       return result[0];
     } catch (error) {
-      console.error('Error in createAgenda:', error);
+      console.error("Error in createAgenda:", error);
       throw error;
     }
   },
@@ -99,7 +119,7 @@ export const wsUserService = {
         ORDER BY scheduled_at ASC
       `;
     } catch (error) {
-      console.error('Error in getUpcomingAgenda:', error);
+      console.error("Error in getUpcomingAgenda:", error);
       throw error;
     }
   },
@@ -114,23 +134,23 @@ export const wsUserService = {
       `;
       return result[0];
     } catch (error) {
-      console.error('Error in updateAgendaStatus:', error);
+      console.error("Error in updateAgendaStatus:", error);
       throw error;
     }
   },
 
   async getUpcomingAppointments() {
     try {
-      // Obtener citas para las próximas 24 horas
-      const result = await db.sql`
+      const appointments = await db.sql`
         SELECT * FROM agenda 
-        WHERE scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
+        WHERE scheduled_at BETWEEN datetime('now') 
+          AND datetime('now', '+24 hours')
         AND status = 'scheduled'
         ORDER BY scheduled_at ASC
       `;
-      return result;
+      return appointments;
     } catch (error) {
-      console.error('Error in getUpcomingAppointments:', error);
+      console.error("Error in getUpcomingAppointments:", error);
       throw error;
     }
   },
@@ -147,7 +167,7 @@ export const wsUserService = {
       `;
       return result[0];
     } catch (error) {
-      console.error('Error in updateAppointmentStatus:', error);
+      console.error("Error in updateAppointmentStatus:", error);
       throw error;
     }
   },
