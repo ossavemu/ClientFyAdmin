@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { config } from "../config/index.js";
-import { db } from "../database/connection.js";
+import { config } from "../../config/index.js";
+import { db } from "../../database/connection.js";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || config.openai_apikey,

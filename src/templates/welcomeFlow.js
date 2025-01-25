@@ -1,10 +1,10 @@
 import { addKeyword, EVENTS } from "@builderbot/bot";
 import fs from "fs";
 import { config } from "../config/index.js";
-import { chat } from "../services/chatgpt.js";
-import { imageService } from "../services/imageService.js";
-import { typing } from "../services/typing.js";
-import { wsUserService } from "../services/wsUserService.js";
+import { chat } from "../services/ai/chatgpt.js";
+import { wsUserService } from "../services/data/wsUserService.js";
+import { imageService } from "../services/setup/imageService.js";
+import { typing } from "../services/setup/typing.js";
 import { notifyNewUser } from "../web/server.js";
 import {
   addMutedMessage,

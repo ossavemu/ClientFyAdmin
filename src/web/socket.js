@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { config } from "../config/index.js";
-import { chat } from "../services/chatgpt.js";
+import { chat } from "../services/ai/chatgpt.js";
 
 let io;
 const mutedUsers = new Map(); // Almacena {phoneNumber: {messages: [], lastThread: null}}
@@ -45,6 +45,15 @@ export const initializeSocket = (httpServer) => {
     socket.on("disconnect", () => {
       console.log("Cliente web desconectado");
     });
+
+    // Agregar manejo de errores para las conexiones WebSocket
+    socket.on("error", (error) => {
+      console.error("WebSocket error:", error);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("Cliente web desconectado:", reason);
+    });
   });
 
   return io;
@@ -81,3 +90,8 @@ export const socket = {
     socketIO.emit(event, data);
   },
 };
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // No dejar que el proceso termine
+});

@@ -8,6 +8,7 @@ import * as defaultBots from "./007_default_bots.js";
 import * as mutedUsers from "./008_muted_users.js";
 import * as bannedUsers from "./009_banned_users.js";
 import * as removeMutedUsers from "./010_remove_muted_users.js";
+import * as calendarIds from "./011_calendar_ids.js";
 
 // Orden para crear (las dependientes al final)
 const migrationsUp = [
@@ -20,10 +21,12 @@ const migrationsUp = [
   { name: "Muted Users", ...mutedUsers },
   { name: "Banned Users", ...bannedUsers },
   { name: "Remove Muted Users", ...removeMutedUsers },
+  { name: "Calendar IDs", ...calendarIds },
 ];
 
 // Orden para eliminar (las dependientes primero)
 const migrationsDown = [
+  { name: "Calendar IDs", ...calendarIds },
   { name: "Remove Muted Users", ...removeMutedUsers },
   { name: "Banned Users", ...bannedUsers },
   { name: "Muted Users", ...mutedUsers },

@@ -1,10 +1,10 @@
 import { addKeyword, EVENTS } from "@builderbot/bot";
 import { config } from "../config/index.js";
-import { chat } from "../services/chatgpt.js";
-import { imageService } from "../services/imageService.js";
-import { typing } from "../services/typing.js";
+import { chat } from "../services/ai/chatgpt.js";
+import { wsUserService } from "../services/data/wsUserService.js";
+import { imageService } from "../services/setup/imageService.js";
+import { typing } from "../services/setup/typing.js";
 import { voice2text } from "../services/voicegpt.js";
-import { wsUserService } from "../services/wsUserService.js";
 import { downloadFile, downloadFileBaileys } from "../utils/downloader.js";
 import { removeFile } from "../utils/remover.js";
 import { dateFlow } from "./dateFlow.js";

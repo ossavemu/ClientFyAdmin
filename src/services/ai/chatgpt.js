@@ -1,9 +1,9 @@
 import OpenAI from "openai";
-import { config } from "../config/index.js";
+import { config } from "../../config/index.js";
+import { wsUserService } from "../data/wsUserService.js";
 import { assistantService } from "./assistantService.js";
 import { getPrompt } from "./promptService.js";
 import { trainingService } from "./trainingService.js";
-import { wsUserService } from "./wsUserService.js";
 
 const openaiApiKey = config.openai_apikey;
 
@@ -76,12 +76,39 @@ export const chat = async (
       content: question,
     });
 
-    // Ejecutar el asistente usando el prompt obtenido
-    console.log("Ejecutando asistente...");
-    const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-      assistant_id: assistantId,
-      instructions: `${config.defaultPrompt(userName)}\n\n${prompt}`,
-    });
+    // Modificar para incluir un mensaje de bienvenida más elaborado si es el primer mensaje
+    const isFirstMessage = !thread;
+    let run;
+
+    if (
+      isFirstMessage &&
+      question.toLowerCase().match(/^(hola|buenos|hi|hey)/)
+    ) {
+      const customInstructions = `
+        ${config.defaultPrompt(userName)}
+        
+        Instrucciones adicionales:
+        1. Preséntate como un asesor comercial profesional y amigable
+        2. Menciona brevemente los productos/servicios principales
+        3. Pregunta específicamente en qué puedes ayudar
+        4. Mantén un tono entusiasta pero profesional
+        5. Incluye una frase que genere interés en los productos/servicios
+        
+        ${prompt}
+      `;
+
+      // Ejecutar el asistente con instrucciones personalizadas
+      run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+        assistant_id: assistantId,
+        instructions: customInstructions,
+      });
+    } else {
+      // Usar las instrucciones normales para mensajes que no son de bienvenida
+      run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+        assistant_id: assistantId,
+        instructions: `${config.defaultPrompt(userName)}\n\n${prompt}`,
+      });
+    }
 
     // Si la corrida se completa, obtener la respuesta
     if (run.status === "completed") {

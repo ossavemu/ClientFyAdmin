@@ -16,6 +16,15 @@
         Panel de Control ChatBot
       </h1>
 
+      <div id="botStatus" class="mb-4 text-center">
+        <div
+          class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold"
+        >
+          <span class="w-3 h-3 rounded-full mr-2"></span>
+          <span class="status-text">Verificando estado...</span>
+        </div>
+      </div>
+
       <div class="bg-white rounded-lg shadow-xl p-6 max-w-4xl mx-auto">
         <div class="overflow-x-auto">
           <table class="min-w-full">
@@ -232,6 +241,70 @@
           user.status = status;
           updateUsersTable();
         }
+      });
+
+      // Función para actualizar el estado visual
+      function updateStatusUI(status) {
+        const statusDiv = document.getElementById("botStatus");
+        const statusDot = statusDiv.querySelector("span:first-child");
+        const statusText = statusDiv.querySelector(".status-text");
+        const container = statusDiv.querySelector("div");
+
+        const states = {
+          disconnected: {
+            color: "bg-gray-500",
+            bgColor: "bg-gray-100",
+            text: "Desconectado",
+          },
+          connecting: {
+            color: "bg-yellow-500",
+            bgColor: "bg-yellow-100",
+            text: "Conectando...",
+          },
+          show_qr: {
+            color: "bg-blue-500",
+            bgColor: "bg-blue-100",
+            text: "Esperando escaneo de QR",
+          },
+          connected: {
+            color: "bg-green-500",
+            bgColor: "bg-green-100",
+            text: "Conectado",
+          },
+          error: {
+            color: "bg-red-500",
+            bgColor: "bg-red-100",
+            text: status.error || "Error de conexión",
+          },
+        };
+
+        const currentState = states[status.status] || states.disconnected;
+
+        // Remover clases anteriores
+        statusDot.className = `w-3 h-3 rounded-full mr-2 ${currentState.color}`;
+        container.className = `inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${currentState.bgColor}`;
+        statusText.textContent = currentState.text;
+      }
+
+      // Función para verificar el estado
+      async function checkStatus() {
+        try {
+          const response = await fetch("/api/status");
+          const status = await response.json();
+          updateStatusUI(status);
+        } catch (error) {
+          console.error("Error verificando estado:", error);
+          updateStatusUI({ status: "error", error: "Error de conexión" });
+        }
+      }
+
+      // Verificar estado cada 30 segundos
+      checkStatus();
+      setInterval(checkStatus, 30000);
+
+      // Escuchar actualizaciones de estado vía WebSocket
+      socket.on("botStatusChanged", (status) => {
+        updateStatusUI(status);
       });
 
       // Cargar usuarios iniciales y actualizar cada 30 segundos

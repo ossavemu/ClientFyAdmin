@@ -1,4 +1,4 @@
-import { simpleChat } from '../services/simplegpt.js';
+import { simpleChat } from "../services/ai/simplegpt.js";
 
 export async function text2iso(text) {
   const currentDate = new Date();
@@ -7,7 +7,7 @@ export async function text2iso(text) {
 
   const messages = [
     {
-      role: 'user',
+      role: "user",
       content: text,
     },
   ];

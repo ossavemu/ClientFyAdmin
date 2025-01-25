@@ -1,5 +1,5 @@
-import { config } from "../config/index.js";
-import { prompt as defaultPrompt } from "../prompt.js";
+import { config } from "../../config/index.js";
+import { prompt as defaultPrompt } from "../../prompt.js";
 
 export const getPrompt = async (phoneNumber) => {
   try {

@@ -1,84 +1,44 @@
 import { createBot, MemoryDB as Database } from "@builderbot/bot";
 import { config } from "./config/index.js";
-import { db } from "./database/connection.js";
-import { providerBaileys, providerMeta } from "./provider/index.js";
-import { reminder } from "./services/reminder.js";
+import { databaseService } from "./services/data/databaseService.js";
+import { reminder } from "./services/features/reminder.js";
+import { botService } from "./services/setup/botService.js";
+import { logger } from "./services/setup/logger.js";
+import { providerService } from "./services/setup/providerService.js";
 import templates from "./templates/index.js";
 import { webServer } from "./web/server.js";
 
-const PORT = config.PORT;
-
-// Función para logs limpios
-const log = (message, error = false) => {
-  const timestamp = new Date().toISOString();
-  const prefix = error ? "❌ ERROR:" : "✅ INFO:";
-  console.log(`[${timestamp}] ${prefix} ${message}`);
-};
-
 const main = async () => {
   try {
-    log("Iniciando aplicación...");
-    await db.testConnection();
-    log("Conexión a base de datos establecida");
+    logger.info("Iniciando aplicación...");
+    await databaseService.testConnection();
+    logger.info("Conexión a base de datos establecida");
 
-    const adapterFlow = templates;
-    let adapterProvider;
-    let botNumber;
-
-    if (config.provider === "meta") {
-      adapterProvider = providerMeta;
-      botNumber = config.numberId;
-      log(`Usando provider Meta (${botNumber})`);
-    } else if (config.provider === "baileys") {
-      adapterProvider = providerBaileys;
-      botNumber = config.P_NUMBER;
-      log(`Usando provider Baileys (${botNumber})`);
-    } else {
-      throw new Error("ERROR: Provider no válido en .env");
-    }
-
-    // Registrar el bot en la base de datos
-    try {
-      log("Registrando bot en la base de datos...");
-      await db.sql`
-        INSERT INTO ws_users (phone_number, name)
-        VALUES (${botNumber}, ${`Bot ${config.provider}`})
-        ON CONFLICT (phone_number) DO NOTHING
-      `;
-
-      await db.sql`
-        INSERT INTO bot_numbers (phone_number, provider)
-        VALUES (${botNumber}, ${config.provider})
-        ON CONFLICT (phone_number) DO NOTHING
-      `;
-      log(`Bot registrado exitosamente: ${botNumber} (${config.provider})`);
-    } catch (error) {
-      log(`Error registrando bot: ${error.message}`, true);
-      throw error;
-    }
+    const { provider: adapterProvider, botNumber } =
+      providerService.getProvider();
+    await databaseService.registerBot(botNumber, config.provider);
 
     const adapterDB = new Database();
-
     const { httpServer } = await createBot({
-      flow: adapterFlow,
+      flow: templates,
       provider: adapterProvider,
       database: adapterDB,
     });
 
-    httpServer(+PORT);
-    log(`Servidor iniciado en puerto ${PORT}`);
+    httpServer(config.PORT);
+    logger.info(`Servidor iniciado en puerto ${config.PORT}`);
 
     reminder(adapterProvider);
-    log("Servicio de recordatorios iniciado");
+    logger.info("Servicio de recordatorios iniciado");
 
-    log("Bot y servicios iniciados correctamente");
-
-    // Iniciar servidor web usando el puerto configurado
     webServer.listen(config.WEB_PORT, () => {
-      log(`Panel web iniciado en puerto ${config.WEB_PORT}`);
+      logger.info(`Panel web iniciado en puerto ${config.WEB_PORT}`);
     });
+
+    botService.startStatusCheck();
+    logger.info("Bot y servicios iniciados correctamente");
   } catch (error) {
-    log(error.message, true);
+    logger.error("Error iniciando aplicación:", error);
     process.exit(1);
   }
 };

@@ -1,6 +1,6 @@
-import { db } from "../database/connection.js";
-import { agendaSchema } from "../schemas/agenda.js";
-import { historicSchema, wsUserSchema } from "../schemas/wsUser.js";
+import { db } from "../../database/connection.js";
+import { agendaSchema } from "../../schemas/agenda.js";
+import { historicSchema, wsUserSchema } from "../../schemas/wsUser.js";
 
 export const wsUserService = {
   async createOrUpdateUser(phoneNumber, name) {
@@ -168,6 +168,21 @@ export const wsUserService = {
       return result[0];
     } catch (error) {
       console.error("Error in updateAppointmentStatus:", error);
+      throw error;
+    }
+  },
+
+  async getRecentHistory(phoneNumber, limit = 10) {
+    try {
+      const history = await db.sql`
+        SELECT * FROM historic 
+        WHERE phone_number = ${phoneNumber}
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
+      return history;
+    } catch (error) {
+      console.error("Error in getRecentHistory:", error);
       throw error;
     }
   },

@@ -8,11 +8,35 @@ const app = express();
 const httpServer = createServer(app);
 const io = initializeSocket(httpServer);
 
+// Estado global del bot
+let botStatus = {
+  state: "disconnected", // disconnected, connecting, show_qr, connected, error
+  phoneBot: null,
+  qr: null,
+  error: null,
+};
+
 // Mantener un registro en memoria de los usuarios activos
 const activeUsers = new Map();
 
-// Servir archivos estáticos
-app.use(express.static("src/web/public"));
+// Servir archivos estáticos solo en /panel
+app.use("/panel", express.static("src/web/public"));
+
+// Endpoint para obtener el estado del bot
+app.get("/api/status", (req, res) => {
+  const response = {
+    status: botStatus.state,
+    phoneBot: botStatus.phoneBot || config.P_NUMBER,
+    ...(botStatus.qr && { qr: botStatus.qr }),
+    ...(botStatus.error && { error: botStatus.error }),
+  };
+  res.json(response);
+});
+
+// Redirigir / a /panel
+app.get("/", (req, res) => {
+  res.redirect("/panel");
+});
 
 // Endpoint para obtener el historial
 app.get("/api/history", async (req, res) => {
@@ -172,5 +196,13 @@ export const notifyNewUser = async (phoneNumber, name) => {
   }
 };
 
+// Exportar funciones para actualizar el estado del bot
+export const updateBotStatus = (status) => {
+  botStatus = { ...botStatus, ...status };
+  // Notificar a los clientes web sobre el cambio de estado
+  socket.emit("botStatusChanged", botStatus);
+};
+
 // Exportar para usar en app.js
 export const webServer = httpServer;
+export { app };

@@ -1,6 +1,8 @@
 # build output
 dist/
 
+pnpm-lock.yaml
+
 # Credenciales y archivos sensibles
 clientfycalendar.json
 
