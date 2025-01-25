@@ -1,7 +1,7 @@
 import { addKeyword, EVENTS } from "@builderbot/bot";
 import { wsUserService } from "../services/data/wsUserService.js";
-import { emailInvite } from "../services/email.js";
 import { createEvent } from "../services/features/calendar.js";
+import { emailInvite } from "../services/features/email.js";
 import { zoomInviteLink } from "../services/features/zoom.js";
 import { typing } from "../services/setup/typing.js";
 

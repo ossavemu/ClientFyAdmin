@@ -86,7 +86,7 @@ export const reminder = async (adapterProvider) => {
     }
   });
 
-  // Recordatorios de citas (mantenemos la implementación existente)
+  // Recordatorios de citas: verificar cada hora
   schedule("0 * * * *", async () => {
     if (!config.enableAppointments) {
       console.log("ℹ️ Recordatorios de citas deshabilitados");
@@ -103,17 +103,42 @@ export const reminder = async (adapterProvider) => {
         try {
           const appointmentTime = new Date(appointment.scheduled_at);
           const now = new Date();
+
+          // Calcular diferencia en horas
           const hoursUntilAppointment = Math.round(
             (appointmentTime - now) / (1000 * 60 * 60)
           );
 
-          if (
-            hoursUntilAppointment === 24 ||
-            hoursUntilAppointment === 2 ||
-            Math.round((appointmentTime - now) / (1000 * 60)) === 30
-          ) {
+          // Obtener hora actual
+          const currentHour = now.getHours();
+
+          // Verificar si es momento de enviar recordatorio
+          const shouldSendReminder =
+            // Día anterior a las 6am
+            (hoursUntilAppointment <= 42 &&
+              hoursUntilAppointment > 41 &&
+              currentHour === 6) ||
+            // Día anterior a las 8pm
+            (hoursUntilAppointment <= 28 &&
+              hoursUntilAppointment > 27 &&
+              currentHour === 20) ||
+            // Día de la cita a las 6am
+            (hoursUntilAppointment <= 18 &&
+              hoursUntilAppointment > 17 &&
+              currentHour === 6) ||
+            // Una hora antes de la cita
+            (hoursUntilAppointment <= 1 && hoursUntilAppointment > 0);
+
+          if (shouldSendReminder) {
+            let reminderType = "";
+            if (hoursUntilAppointment > 40) reminderType = "día anterior 6am";
+            else if (hoursUntilAppointment > 26)
+              reminderType = "día anterior 8pm";
+            else if (hoursUntilAppointment > 16) reminderType = "mismo día 6am";
+            else reminderType = "una hora antes";
+
             const reminderMessage = `
-¡Hola! 👋 Te recordamos tu próxima cita:
+¡Hola! 👋 Te recordamos que tienes una cita programada:
 
 📅 Fecha: ${appointmentTime.toLocaleDateString("es-ES", {
               weekday: "long",
@@ -126,8 +151,6 @@ export const reminder = async (adapterProvider) => {
               minute: "2-digit",
             })}
 ${appointment.zoom_link ? `🔗 Link de Zoom: ${appointment.zoom_link}` : ""}
-
-Por favor, confirma tu asistencia respondiendo "confirmo" o "cancelar".
 `;
 
             await adapterProvider.sendMessage(
@@ -139,7 +162,7 @@ Por favor, confirma tu asistencia respondiendo "confirmo" o "cancelar".
             await wsUserService.logInteraction(
               appointment.phone_number,
               "text",
-              `Recordatorio de cita enviado (${hoursUntilAppointment} horas antes)`,
+              `Recordatorio de cita enviado (${reminderType})`,
               "bot"
             );
           }
