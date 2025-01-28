@@ -1,15 +1,15 @@
-import { db } from '../connection.js';
+import { db } from "../connection.js";
 
 export async function up() {
   try {
     await db.sql`
       CREATE TABLE IF NOT EXISTS user_assistants (
-        phone_number VARCHAR(20) PRIMARY KEY REFERENCES ws_users(phone_number),
+        phone_number VARCHAR(20),
         assistant_id VARCHAR(100) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT fk_ws_users 
-          FOREIGN KEY (phone_number) 
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_used DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (phone_number),
+        FOREIGN KEY (phone_number) 
           REFERENCES ws_users(phone_number) 
           ON DELETE CASCADE
       )
@@ -20,19 +20,20 @@ export async function up() {
       ON user_assistants(assistant_id)
     `;
 
-    console.log('Assistants table migration completed successfully');
+    console.log("Assistants table migration completed successfully");
   } catch (error) {
-    console.error('Assistants table migration failed:', error);
+    console.error("Assistants table migration failed:", error);
     throw error;
   }
 }
 
-export async function down() {
-  try {
-    await db.sql`DROP TABLE IF EXISTS user_assistants`;
-    console.log('Assistants table rollback completed successfully');
-  } catch (error) {
-    console.error('Assistants table rollback failed:', error);
-    throw error;
+export const down = async (db) => {
+  const exists = await db.sql`
+    SELECT name FROM sqlite_master 
+    WHERE type='table' AND name='bot_assistants'
+  `;
+
+  if (exists.length > 0) {
+    await db.sql`DROP TABLE IF EXISTS bot_assistants`;
   }
-}
+};

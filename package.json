@@ -5,9 +5,16 @@
   "scripts": {
     "lint": "eslint . --no-ignore",
     "dev": "pnpm run lint && nodemon ./src/app.js",
-    "migrate": "node src/database/migrations/runMigrations.js",
-    "migrate:down": "node -e 'require(\"./src/database/migrations/001_initial_schema.js\").down()'",
-    "start": "node src/app.js"
+    "migrate": "node src/database/migrations/runMigrations.js up",
+    "migrate:down": "node src/database/migrations/runMigrations.js down",
+    "start": "node src/app.js",
+    "migrate:backup": "node scripts/backup-db.js",
+    "migrate:turso": "node src/database/migrations/runMigrations.js",
+    "test:connection": "node scripts/test-connection.js",
+    "test:migrations": "node scripts/test-migrations.js",
+    "test:all": "node scripts/test-all-migrations.js",
+    "setup": "chmod +x setup.sh start.sh stop.sh && ./setup.sh",
+    "start:prod": "./stop.sh && ./start.sh"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
@@ -15,10 +22,11 @@
     "@builderbot/provider-baileys": "1.2.2",
     "@builderbot/provider-meta": "1.2.2",
     "@ffmpeg-installer/ffmpeg": "1.1.0",
-    "@neondatabase/serverless": "^0.10.3",
+    "@libsql/client": "^0.14.0",
     "base-64": "^1.0.0",
     "dotenv": "16.4.5",
     "email-validator": "2.0.4",
+    "express": "^4.21.2",
     "fluent-ffmpeg": "2.1.2",
     "google-auth-library": "^9.15.0",
     "googleapis": "144.0.0",
@@ -29,6 +37,7 @@
     "nodemailer": "^6.9.16",
     "openai": "4.68.4",
     "resend": "^4.0.1",
+    "socket.io": "^4.8.1",
     "typescript": "5.6.3",
     "zod": "^3.23.8"
   },
@@ -40,5 +49,13 @@
   },
   "trustedDependencies": [
     "protobufjs"
-  ]
+  ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@ffmpeg-installer/darwin-arm64",
+      "protobufjs",
+      "sharp"
+    ]
+  },
+  "packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a"
 }
