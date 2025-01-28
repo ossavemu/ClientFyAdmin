@@ -1,6 +1,8 @@
 import { addKeyword, EVENTS } from "@builderbot/bot";
+import fs from "fs";
 import { config } from "../config/index.js";
 import { chat } from "../services/ai/chatgpt.js";
+import { trainingService } from "../services/ai/trainingService.js";
 import { voice2text } from "../services/ai/voicegpt.js";
 import { wsUserService } from "../services/data/wsUserService.js";
 import { imageService } from "../services/setup/imageService.js";
@@ -87,15 +89,28 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
           if (images && images.length > 0) {
             await ctxFn.flowDynamic("Aquí tienes las imágenes solicitadas:");
 
-            // Enviar cada imagen
             for (const image of images) {
               await typing(1, { ctx, ctxFn });
-              await ctxFn.flowDynamic([
-                {
-                  body: image.name,
-                  media: image.url,
-                },
-              ]);
+              if (!image.localPath) {
+                console.error("Ruta local no válida:", image);
+                continue;
+              }
+
+              try {
+                await ctxFn.flowDynamic([
+                  {
+                    body: image.name || "Imagen",
+                    media: image.localPath,
+                  },
+                ]);
+              } catch (imgError) {
+                console.error("Error enviando imagen:", imgError);
+              } finally {
+                // Limpiar archivo temporal
+                if (fs.existsSync(image.localPath)) {
+                  fs.unlinkSync(image.localPath);
+                }
+              }
             }
             return ctxFn.endFlow();
           } else {
@@ -107,6 +122,56 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
           console.error("Error al obtener imágenes:", error);
           return ctxFn.endFlow(
             "Lo siento, hubo un problema al obtener las imágenes. Por favor, intenta más tarde."
+          );
+        }
+      }
+
+      // Verificar si está solicitando documentos/archivos
+      const isRequestingFiles =
+        trainingService.containsTrainingKeywords(transcript);
+
+      if (isRequestingFiles) {
+        await typing(1, { ctx, ctxFn });
+        try {
+          const files = await trainingService.getTrainingFiles(phoneNumber);
+
+          if (files && files.length > 0) {
+            await ctxFn.flowDynamic("Aquí tienes los documentos solicitados:");
+
+            for (const file of files) {
+              await typing(1, { ctx, ctxFn });
+              if (!file.localPath) {
+                console.error("Ruta local no válida:", file);
+                continue;
+              }
+
+              try {
+                await ctxFn.flowDynamic([
+                  {
+                    body: file.name || "Documento",
+                    media: file.localPath,
+                    mimeType: file.mimeType,
+                  },
+                ]);
+              } catch (fileError) {
+                console.error("Error enviando archivo:", fileError);
+              } finally {
+                // Limpiar archivo temporal
+                if (fs.existsSync(file.localPath)) {
+                  fs.unlinkSync(file.localPath);
+                }
+              }
+            }
+            return ctxFn.endFlow();
+          } else {
+            return ctxFn.endFlow(
+              "Lo siento, no encontré documentos disponibles."
+            );
+          }
+        } catch (error) {
+          console.error("Error al obtener documentos:", error);
+          return ctxFn.endFlow(
+            "Lo siento, hubo un problema al obtener los documentos. Por favor, intenta más tarde."
           );
         }
       }

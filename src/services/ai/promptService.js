@@ -6,37 +6,76 @@ export const getPrompt = async (phoneNumber) => {
     console.log("🔍 Iniciando obtención de prompt...");
     console.log("📞 Número original:", phoneNumber);
 
-    // Limpiar el número
+    // Limpiar el número y mantener el prefijo del país
     const cleaned = phoneNumber.toString().replace(/\D/g, "");
     console.log("📱 Número limpio:", cleaned);
 
-    // Detectar país (asumimos Colombia si empieza con 57)
-    const countryCode = cleaned.startsWith("57") ? "CO" : "UNKNOWN";
-    console.log("🌍 País detectado:", countryCode);
-
-    // Obtener el número sin prefijo de país
-    const numberWithoutPrefix = cleaned.startsWith("57")
-      ? cleaned.substring(2)
-      : cleaned;
-    console.log("📱 Número sin prefijo:", numberWithoutPrefix);
-
-    // Construir URL
-    const url = `${config.prompt_api_url}/${numberWithoutPrefix}`;
+    // Construir URL con el número completo incluyendo prefijo
+    const url = `${config.prompt_api_url}?phoneNumber=${cleaned}`;
     console.log("🌐 URL:", url);
 
     // Intentar obtener el prompt personalizado
     const response = await fetch(url);
     console.log("📥 Status de respuesta:", response.status);
 
+    // Loguear la respuesta completa para debug
+    const data = await response.json();
+    console.log("📄 Respuesta completa:", data);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log(
+          "No se encontró prompt personalizado, usando prompt por defecto"
+        );
+        console.log("Prompt por defecto:", defaultPrompt);
+        return defaultPrompt;
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!data.success || !data.prompt) {
+      console.log(
+        "Respuesta no válida del servidor, usando prompt por defecto"
+      );
+      console.log("Datos recibidos:", data);
+      return defaultPrompt;
+    }
+
+    console.log("✅ Prompt personalizado encontrado:", data.prompt);
+    return data.prompt;
+  } catch (error) {
+    console.log("❌ Error obteniendo prompt:", error);
+    console.log("Usando prompt de respaldo con instrucciones de ventas");
+    return defaultPrompt;
+  }
+};
+
+export const savePrompt = async (phoneNumber, promptText) => {
+  try {
+    console.log("💾 Iniciando guardado de prompt...");
+
+    // Limpiar el número
+    const cleaned = phoneNumber.toString().replace(/\D/g, "");
+
+    const response = await fetch(config.prompt_api_url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        phoneNumber: cleaned,
+        prompt: promptText,
+      }),
+    });
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
-    return data.prompt;
+    return data.success;
   } catch (error) {
-    console.log("Error obteniendo prompt:", error);
-    console.log("Usando prompt de respaldo con instrucciones de ventas");
-    return defaultPrompt;
+    console.log("Error guardando prompt:", error);
+    throw error;
   }
 };

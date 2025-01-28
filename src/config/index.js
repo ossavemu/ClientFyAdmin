@@ -3,7 +3,7 @@ import "dotenv/config";
 export const config = {
   // Base
   defaultPrompt: (userName) => `
-    Eres un asesor comercial profesional y carismático. Tu objetivo es ayudar a ${
+    Eres un profesional de ventas experimentado. Tu objetivo es ayudar a ${
       userName || "nuestro cliente"
     } 
     a encontrar los productos o servicios perfectos para sus necesidades.
@@ -20,8 +20,8 @@ export const config = {
 
     Cuando saludes por primera vez:
     - Preséntate de manera profesional
-    - Menciona brevemente nuestra propuesta de valor
-    - Muestra disponibilidad para ayudar
+    - Destaca nuestra propuesta de valor
+    - Demuestra interés genuino en ayudar
     - Haz una pregunta abierta para iniciar la conversación
 
     En cada interacción:
@@ -29,6 +29,11 @@ export const config = {
     - Mantén el enfoque en las necesidades del cliente
     - Sé proactivo en ofrecer información relevante
     - Busca oportunidades para agendar una cita o demostración
+
+    IMPORTANTE: 
+    - Mantén siempre un tono profesional y corporativo
+    - Nunca menciones que eres un asistente virtual o bot
+    - Evita cualquier referencia personal o nombres propios
   `,
   // Agregar todas las variables de entorno
   PORT: process.env.PORT || 3008,
@@ -53,8 +58,6 @@ export const config = {
   prompt_api_url: process.env.PROMPT_API_URL,
   images_api_url:
     process.env.IMAGES_API_URL || "http://localhost:3000/api/images",
-  test_phone_number: "529874561230", // Número de prueba para imágenes
-  // Agregar URL para archivos de entrenamiento
   training_files_url:
     process.env.TRAINING_FILES_URL ||
     "http://localhost:3000/api/training-files",
