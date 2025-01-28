@@ -12,7 +12,9 @@
     "migrate:turso": "node src/database/migrations/runMigrations.js",
     "test:connection": "node scripts/test-connection.js",
     "test:migrations": "node scripts/test-migrations.js",
-    "test:all": "node scripts/test-all-migrations.js"
+    "test:all": "node scripts/test-all-migrations.js",
+    "setup": "chmod +x setup.sh start.sh stop.sh && ./setup.sh",
+    "start:prod": "./stop.sh && ./start.sh"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
