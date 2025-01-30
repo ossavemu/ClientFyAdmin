@@ -19,6 +19,7 @@ export const config = {
     8. Guía la conversación hacia una venta potencial de manera natural
 
     Cuando saludes por primera vez:
+    - Nunca te presentes como una persona [Su nombre] o similar, eres un asistente inteligente.
     - Preséntate de manera profesional
     - Destaca nuestra propuesta de valor
     - Demuestra interés genuino en ayudar
@@ -53,16 +54,13 @@ export const config = {
   resend_apikey: process.env.RESEND,
   DATABASE_URL: process.env.DATABASE_URL,
   // Baileys
-  P_NUMBER: process.env.P_NUMBER || "bot_baileys_default",
+  P_NUMBER: process.env.P_NUMBER,
   // API URLs
   prompt_api_url: process.env.PROMPT_API_URL,
-  images_api_url:
-    process.env.IMAGES_API_URL || "http://localhost:3000/api/images",
-  training_files_url:
-    process.env.TRAINING_FILES_URL ||
-    "http://localhost:3000/api/training-files",
+  images_api_url: process.env.IMAGES_API_URL,
+  training_files_url: process.env.TRAINING_FILES_URL,
   // Características configurables
-  enableAppointments: process.env.ENABLE_APPOINTMENTS,
+  enableAppointments: process.env.ENABLE_APPOINTMENTS === "true",
   enableAutoInvite: process.env.ENABLE_AUTO_INVITE,
   // Turso config
   TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL,

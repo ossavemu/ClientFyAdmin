@@ -22,12 +22,7 @@ export const imageService = {
       const data = await response.json();
       console.log("📄 Respuesta del servidor:", JSON.stringify(data, null, 2));
 
-      if (!data.success) {
-        console.log("❌ Error: Respuesta no exitosa");
-        return [];
-      }
-
-      if (!Array.isArray(data.images)) {
+      if (!data.success || !Array.isArray(data.images)) {
         console.log("⚠️ No se encontraron imágenes");
         return [];
       }

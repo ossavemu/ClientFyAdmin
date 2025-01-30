@@ -1,6 +1,8 @@
+import fs from "fs";
 import OpenAI from "openai";
 import { config } from "../../config/index.js";
 import { wsUserService } from "../data/wsUserService.js";
+import { imageService } from "../setup/imageService.js";
 import { assistantService } from "./assistantService.js";
 import { getPrompt } from "./promptService.js";
 import { trainingService } from "./trainingService.js";
@@ -59,6 +61,50 @@ export const chat = async (
       console.log("Creando nuevo thread...");
       thread = await openai.beta.threads.create();
       console.log("Nuevo thread creado:", thread.id);
+
+      // Obtener y subir archivos de entrenamiento
+      const trainingFiles = await trainingService.getTrainingFiles(botNumber);
+      if (trainingFiles.length > 0) {
+        console.log("Subiendo archivos a OpenAI...");
+
+        // Subir archivos y crear vector store
+        const filePromises = trainingFiles.map(async (file) => {
+          const uploadedFile = await openai.files.create({
+            file: fs.createReadStream(file.localPath),
+            purpose: "assistants",
+          });
+          return uploadedFile.id;
+        });
+
+        const fileIds = await Promise.all(filePromises);
+
+        // Crear vector store
+        const vectorStore = await openai.beta.vectorStores.create({
+          name: `VectorStore-${botNumber}-${Date.now()}`,
+          file_ids: fileIds,
+        });
+
+        // Actualizar el assistant con el vector store
+        const assistantId = await assistantService.getOrCreateAssistant(
+          botNumber,
+          config.provider
+        );
+        await openai.beta.assistants.update(assistantId, {
+          tool_resources: {
+            file_search: {
+              vector_store_ids: [vectorStore.id],
+            },
+          },
+        });
+
+        // Limpiar archivos temporales
+        trainingFiles.forEach((file) => {
+          if (file.localPath && fs.existsSync(file.localPath)) {
+            console.log("Limpiando archivo temporal:", file.localPath);
+            fs.unlinkSync(file.localPath);
+          }
+        });
+      }
     } else {
       console.log("Usando thread existente:", thread.id);
     }
@@ -84,9 +130,30 @@ export const chat = async (
       isFirstMessage &&
       question.toLowerCase().match(/^(hola|buenos|hi|hey)/)
     ) {
+      const hasDocuments =
+        (await trainingService.getTrainingFiles(botNumber)).length > 0;
+      const hasImages = (await imageService.getImages(botNumber)).length > 0;
+
       const customInstructions = `
         ${config.defaultPrompt(userName)}
         
+        SEÑALALE AL USUARIO:
+        ${
+          config.enableAppointments
+            ? '- Que puede pedir citas usando palabras clave como "cita, agenda..."'
+            : ""
+        }
+        ${
+          hasDocuments
+            ? '- Que puede solicitar documentos usando palabras clave como "documento, archivo..."'
+            : ""
+        }
+        ${
+          hasImages
+            ? '- Que puede solicitar imágenes usando palabras clave como "imágenes, fotos..."'
+            : ""
+        }
+
         Instrucciones adicionales:
         1. Preséntate como un asesor comercial profesional y amigable
         2. Menciona brevemente los productos/servicios principales

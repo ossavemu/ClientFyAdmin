@@ -59,14 +59,12 @@ export const trainingService = {
       }
 
       const data = await response.json();
-      console.log("📄 Respuesta del servidor:", JSON.stringify(data, null, 2));
 
-      if (!data.success) {
-        console.log("❌ Error en la respuesta del servidor:", data.error);
+      if (!data.success || !Array.isArray(data.files)) {
         return [];
       }
 
-      // Descargar y guardar los archivos localmente
+      // Procesar archivos y descargarlos localmente
       const processedFiles = await Promise.all(
         data.files.map(async (file) => {
           try {
@@ -86,13 +84,9 @@ export const trainingService = {
         })
       );
 
-      // Filtrar los archivos que se descargaron correctamente
-      const validFiles = processedFiles.filter((file) => file !== null);
-
-      console.log("✅ Archivos procesados:", validFiles.length);
-      return validFiles;
+      return processedFiles.filter((file) => file !== null);
     } catch (error) {
-      console.error("❌ Error en trainingService:", error);
+      console.error("Error en trainingService:", error);
       return [];
     }
   },
@@ -138,16 +132,19 @@ export const trainingService = {
 
   async downloadAndProcessFile(url, filename) {
     try {
-      console.log("📥 Descargando archivo:", filename);
       const response = await fetch(url);
+      if (!response.ok)
+        throw new Error(`Error descargando: ${response.statusText}`);
 
-      if (!response.ok) {
-        throw new Error(`Error descargando archivo: ${response.statusText}`);
-      }
+      // Extraer extensión del Content-Type o de la URL
+      const contentType = response.headers.get("content-type");
+      const urlExt = path.extname(new URL(url).pathname);
+      const mimeExt = this.getExtensionFromMime(contentType);
+      const extension = urlExt || mimeExt || "";
 
-      // Extraer la extensión de la URL
-      const urlPath = new URL(url).pathname;
-      const extension = path.extname(urlPath); // Esto obtendrá .pdf de la URL
+      // Limpiar nombre y asegurar extensión
+      const baseName = path.basename(filename, path.extname(filename));
+      const cleanName = `${baseName.replace(/[^a-zA-Z0-9]/g, "_")}${extension}`;
 
       const buffer = await response.arrayBuffer();
       const tempDir = path.join(__dirname, "../../temp");
@@ -156,24 +153,29 @@ export const trainingService = {
         fs.mkdirSync(tempDir, { recursive: true });
       }
 
-      // Agregar la extensión al nombre del archivo si no la tiene
-      const filenameWithExt = filename.includes(".")
-        ? filename
-        : `${filename}${extension}`;
-
-      const tempPath = path.join(tempDir, filenameWithExt);
-
-      fs.writeFileSync(tempPath, Buffer.from(buffer));
-      console.log("✅ Archivo guardado en:", tempPath);
+      const filePath = path.join(tempDir, cleanName);
+      fs.writeFileSync(filePath, Buffer.from(buffer));
 
       return {
-        path: tempPath,
-        mimeType: this.getMimeType(filenameWithExt),
+        path: filePath,
+        mimeType: this.getMimeType(cleanName),
       };
     } catch (error) {
-      console.error("❌ Error procesando archivo:", error);
+      console.error("Error procesando archivo:", error);
       throw error;
     }
+  },
+
+  getExtensionFromMime(mimeType) {
+    const mimeMap = {
+      "application/pdf": ".pdf",
+      "application/msword": ".doc",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        ".docx",
+      "text/plain": ".txt",
+      // Agregar más tipos MIME según necesidad
+    };
+    return mimeMap[mimeType] || "";
   },
 
   getMimeType(filename) {

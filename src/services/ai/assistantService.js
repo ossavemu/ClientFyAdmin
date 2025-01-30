@@ -95,9 +95,14 @@ export const assistantService = {
 
       // Si no existe, crear uno nuevo
       const assistant = await openai.beta.assistants.create({
-        name: `Bot Assistant ${botNumber}`,
+        name: `Asistente-${botNumber}`,
         instructions: config.defaultPrompt("Cliente"),
-        model: "gpt-4-1106-preview",
+        model: config.model || "gpt-4-turbo",
+        tools: [
+          {
+            type: "file_search",
+          },
+        ],
       });
 
       // Guardar el nuevo asistente
