@@ -2,7 +2,6 @@ import fs from "fs";
 import OpenAI from "openai";
 import { config } from "../../config/index.js";
 import { wsUserService } from "../data/wsUserService.js";
-import { imageService } from "../setup/imageService.js";
 import { assistantService } from "./assistantService.js";
 import { getPrompt } from "./promptService.js";
 import { trainingService } from "./trainingService.js";
@@ -130,29 +129,8 @@ export const chat = async (
       isFirstMessage &&
       question.toLowerCase().match(/^(hola|buenos|hi|hey)/)
     ) {
-      const hasDocuments =
-        (await trainingService.getTrainingFiles(botNumber)).length > 0;
-      const hasImages = (await imageService.getImages(botNumber)).length > 0;
-
       const customInstructions = `
         ${config.defaultPrompt(userName)}
-        
-        SEÑALALE AL USUARIO:
-        ${
-          config.enableAppointments
-            ? '- Que puede pedir citas usando palabras clave como "cita, agenda..."'
-            : ""
-        }
-        ${
-          hasDocuments
-            ? '- Que puede solicitar documentos usando palabras clave como "documento, archivo..."'
-            : ""
-        }
-        ${
-          hasImages
-            ? '- Que puede solicitar imágenes usando palabras clave como "imágenes, fotos..."'
-            : ""
-        }
 
         Instrucciones adicionales:
         1. Preséntate como un asesor comercial profesional y amigable
