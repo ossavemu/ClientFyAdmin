@@ -60,8 +60,75 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
       );
 
       if (isSchedule) {
+        // Verificar qué tipos de citas están habilitados
+        const virtualEnabled = config.enableVirtualAppointments;
+        const inPersonEnabled = config.enableInPersonAppointments;
+
+        if (!virtualEnabled && !inPersonEnabled) {
+          await typing(1, { ctx, ctxFn });
+          return ctxFn.endFlow(
+            "Lo siento, el servicio de citas no está disponible en este momento."
+          );
+        }
+
+        // Si solo un tipo está habilitado, usar ese directamente
+        if (virtualEnabled && !inPersonEnabled) {
+          await ctxFn.state.update({ appointmentType: "virtual" });
+          await typing(1, { ctx, ctxFn });
+          return ctxFn.gotoFlow(dateFlow);
+        }
+
+        if (!virtualEnabled && inPersonEnabled) {
+          await ctxFn.state.update({ appointmentType: "inPerson" });
+          await typing(1, { ctx, ctxFn });
+          return ctxFn.gotoFlow(dateFlow);
+        }
+
+        // Si ambos tipos están habilitados, preguntar al usuario
         await typing(1, { ctx, ctxFn });
-        return ctxFn.gotoFlow(dateFlow);
+        await ctxFn.flowDynamic(
+          "¿Qué tipo de cita prefieres?\n1. Virtual (por videollamada)\n2. Presencial"
+        );
+
+        // Esperar respuesta del usuario
+        await ctxFn.state.update({
+          waitingForAppointmentType: true,
+          lastMessage: transcript,
+        });
+        return;
+      }
+
+      // Manejar la respuesta del tipo de cita si estamos esperando por ella
+      const state = await ctxFn.state.getMyState();
+      if (state?.waitingForAppointmentType) {
+        const response = transcript.toLowerCase();
+        let appointmentType = null;
+
+        if (
+          response.includes("1") ||
+          response.includes("virtual") ||
+          response.includes("video")
+        ) {
+          appointmentType = "virtual";
+        } else if (response.includes("2") || response.includes("presencial")) {
+          appointmentType = "inPerson";
+        }
+
+        if (appointmentType) {
+          await ctxFn.state.update({
+            appointmentType,
+            waitingForAppointmentType: false,
+            voiceTranscript: state.lastMessage, // Restaurar el mensaje original
+          });
+          await typing(1, { ctx, ctxFn });
+          return ctxFn.gotoFlow(dateFlow);
+        } else {
+          await typing(1, { ctx, ctxFn });
+          await ctxFn.flowDynamic(
+            "Por favor, selecciona una opción válida:\n1. Virtual (por videollamada)\n2. Presencial"
+          );
+          return;
+        }
       }
 
       const imageKeywords = [
@@ -176,7 +243,6 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
         }
       }
 
-      const state = await ctxFn.state.getMyState();
       const thread = state?.thread ?? null;
 
       // Pasar el botNumber correctamente a la función chat

@@ -89,29 +89,65 @@ export const assistantService = {
         LIMIT 1
       `;
 
+      let assistantId = null;
+
       if (existingAssistant.length > 0) {
-        return existingAssistant[0].assistant_id;
+        try {
+          // Verificar si el asistente existe en OpenAI
+          await openai.beta.assistants.retrieve(
+            existingAssistant[0].assistant_id
+          );
+          assistantId = existingAssistant[0].assistant_id;
+        } catch (error) {
+          if (error.status === 404) {
+            console.log(
+              "Asistente no encontrado en OpenAI, creando uno nuevo..."
+            );
+            // No asignar assistantId, para que se cree uno nuevo
+          } else {
+            throw error; // Re-lanzar otros errores
+          }
+        }
       }
 
-      // Si no existe, crear uno nuevo
-      const assistant = await openai.beta.assistants.create({
-        name: `Asistente-${botNumber}`,
-        instructions: config.defaultPrompt("Cliente"),
-        model: config.model || "gpt-4-turbo",
-        tools: [
-          {
-            type: "file_search",
-          },
-        ],
-      });
+      if (!assistantId) {
+        // Crear nuevo asistente
+        console.log("Creando nuevo asistente para:", botNumber);
+        const assistant = await openai.beta.assistants.create({
+          name: `Asistente-${botNumber}`,
+          instructions: config.defaultPrompt("Cliente"),
+          model: config.model || "gpt-4-turbo",
+          tools: [
+            {
+              type: "file_search",
+            },
+          ],
+        });
 
-      // Guardar el nuevo asistente
-      await db.sql`
-        INSERT INTO user_assistants (phone_number, assistant_id)
-        VALUES (${botNumber}, ${assistant.id})
-      `;
+        // Actualizar o insertar el nuevo asistente
+        await db.sql`
+          UPDATE user_assistants 
+          SET assistant_id = ${assistant.id}, 
+              updated_at = CURRENT_TIMESTAMP
+          WHERE phone_number = ${botNumber}
+        `;
 
-      return assistant.id;
+        // Si no se actualizó ningún registro, insertar uno nuevo
+        const updateResult = await db.sql`
+          SELECT changes() as changes
+        `;
+
+        if (updateResult[0].changes === 0) {
+          await db.sql`
+            INSERT INTO user_assistants (phone_number, assistant_id)
+            VALUES (${botNumber}, ${assistant.id})
+          `;
+        }
+
+        assistantId = assistant.id;
+      }
+
+      return assistantId;
     } catch (error) {
       console.error("Error in getOrCreateAssistant:", error);
       throw error;

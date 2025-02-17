@@ -9,6 +9,7 @@ import * as mutedUsers from "./008_muted_users.js";
 import * as bannedUsers from "./009_banned_users.js";
 import * as removeMutedUsers from "./010_remove_muted_users.js";
 import * as calendarIds from "./011_calendar_ids.js";
+import * as updateAssistantsTable from "./012_update_assistants_table.js";
 
 // Orden para crear (las dependientes al final)
 const migrationsUp = [
@@ -22,10 +23,12 @@ const migrationsUp = [
   { name: "Banned Users", ...bannedUsers },
   { name: "Remove Muted Users", ...removeMutedUsers },
   { name: "Calendar IDs", ...calendarIds },
+  { name: "Update Assistants Table", ...updateAssistantsTable },
 ];
 
 // Orden para eliminar (las dependientes primero)
 const migrationsDown = [
+  { name: "Update Assistants Table", ...updateAssistantsTable },
   { name: "Calendar IDs", ...calendarIds },
   { name: "Remove Muted Users", ...removeMutedUsers },
   { name: "Banned Users", ...bannedUsers },

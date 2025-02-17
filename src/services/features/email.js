@@ -3,13 +3,21 @@ import { Resend } from "resend";
 import { config } from "../../config/index.js";
 
 const resend = new Resend(config.resend_apikey);
+const COMPANY_NAME = config.company_name || "Clínica Dental";
+const COMPANY_ADDRESS = config.company_address || "Dirección no especificada";
 
-export const emailLogger = async (name, zoomLink, date, clientEmail) => {
+export const emailLogger = async (
+  name,
+  zoomLink,
+  date,
+  clientEmail,
+  isVirtual
+) => {
   try {
     const emailInvite = await resend.emails.send({
-      from: "ClientFy Logger <onboarding@resend.dev>",
+      from: `${COMPANY_NAME} Logger <onboarding@resend.dev>`,
       to: "clientfy0@gmail.com",
-      subject: "Registro de Nueva Cita",
+      subject: `Registro de Nueva Cita ${isVirtual ? "Virtual" : "Presencial"}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px;">
           <h2>Nueva Cita Registrada</h2>
@@ -17,6 +25,9 @@ export const emailLogger = async (name, zoomLink, date, clientEmail) => {
           <ul>
             <li><strong>Cliente:</strong> ${name}</li>
             <li><strong>Email del cliente:</strong> ${clientEmail}</li>
+            <li><strong>Tipo de cita:</strong> ${
+              isVirtual ? "Virtual" : "Presencial"
+            }</li>
             <li><strong>Fecha de creación del evento:</strong> ${new Date().toLocaleString(
               "es-ES",
               {
@@ -25,9 +36,11 @@ export const emailLogger = async (name, zoomLink, date, clientEmail) => {
               }
             )}</li>
             <li><strong>Fecha de la cita:</strong> ${date}</li>
-            <li><strong>Link de Zoom:</strong> ${
-              zoomLink ?? "No disponible"
-            }</li>
+            ${
+              isVirtual
+                ? `<li><strong>Link de Zoom:</strong> ${zoomLink}</li>`
+                : `<li><strong>Ubicación:</strong> ${COMPANY_ADDRESS}</li>`
+            }
           </ul>
           <p>Este es un mensaje automático de registro - No responder</p>
         </div>
@@ -53,51 +66,49 @@ const transporter = nodemailer.createTransport({
 
 export const emailInvite = async (clientEmail, name, date, zoomLink) => {
   try {
+    const isVirtual = !!zoomLink;
     date = new Date(date).toLocaleString("es-ES", {
       dateStyle: "full",
       timeStyle: "short",
     });
-    await emailLogger(name, zoomLink, date, clientEmail);
+    await emailLogger(name, zoomLink, date, clientEmail, isVirtual);
+
+    const emailTemplate = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>Hola ${name},</h2>
+        <p>Te confirmamos tu cita ${
+          isVirtual ? "virtual" : "presencial"
+        } con ${COMPANY_NAME}. Aquí están los detalles:</p>
+        <p><strong>Fecha de la cita:</strong> ${date}</p>
+        ${
+          isVirtual
+            ? `<p><strong>Enlace de Zoom:</strong> <a href="${zoomLink}" style="color: #1a73e8;">${zoomLink}</a></p>`
+            : `<p><strong>Ubicación:</strong> ${COMPANY_ADDRESS}</p><p>Te esperamos en nuestra ubicación en la fecha y hora acordada.</p>`
+        }
+        <p>¡Gracias por confiar en nosotros!</p>
+        <p>Saludos,<br>${COMPANY_NAME}</p>
+      </div>
+    `;
 
     // Si el proveedor es meta, usar Resend
     if (config.provider === "meta") {
       await resend.emails.send({
-        from: "ClientFy <onboarding@resend.dev>",
+        from: `${COMPANY_NAME} <onboarding@resend.dev>`,
         to: clientEmail,
-        subject: "Invitación a una reunión",
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Hola ${name},</h2>
-            <p>Te invitamos a una reunión programada. Aquí están los detalles:</p>
-            <p><strong>Fecha de la cita:</strong> ${date}</p>
-            <p><strong>Enlace de Zoom:</strong> <a href="${
-              zoomLink ?? ""
-            }" style="color: #1a73e8;">${zoomLink ?? ""}</a></p>
-
-            <p>Esperamos verte allí!</p>
-            <p>Saludos,<br>El equipo</p>
-          </div>
-        `,
+        subject: `Confirmación de Cita ${
+          isVirtual ? "Virtual" : "Presencial"
+        } - ${COMPANY_NAME}`,
+        html: emailTemplate,
       });
     } else {
       // Para otros proveedores, usar nodemailer con Gmail
       await transporter.sendMail({
-        from: `"ClientFy" <${config.gmail_user}>`,
+        from: `"${COMPANY_NAME}" <${config.gmail_user}>`,
         to: clientEmail,
-        subject: "Invitación a una reunión",
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Hola ${name},</h2>
-            <p>Te invitamos a una reunión programada. Aquí están los detalles:</p>
-            <p><strong>Fecha de la cita:</strong> ${date}</p>
-            <p><strong>Enlace de Zoom:</strong> <a href="${
-              zoomLink ?? ""
-            }" style="color: #1a73e8;">${zoomLink ?? ""}</a></p>
-
-            <p>Esperamos verte allí!</p>
-            <p>Saludos,<br>El equipo</p>
-          </div>
-        `,
+        subject: `Confirmación de Cita ${
+          isVirtual ? "Virtual" : "Presencial"
+        } - ${COMPANY_NAME}`,
+        html: emailTemplate,
       });
     }
   } catch (error) {

@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 export const config = {
   // Base
   defaultPrompt: (userName) => `
@@ -60,8 +58,12 @@ export const config = {
   images_api_url: process.env.IMAGES_API_URL,
   training_files_url: process.env.TRAINING_FILES_URL,
   // Características configurables
-  enableAppointments: process.env.ENABLE_APPOINTMENTS === "true",
-  enableAutoInvite: process.env.ENABLE_AUTO_INVITE,
+  enableVirtualAppointments: process.env.ENABLE_VIRTUAL_APPOINTMENTS === "true",
+  enableInPersonAppointments:
+    process.env.ENABLE_IN_PERSON_APPOINTMENTS === "true",
+  enableAutoInvite: process.env.ENABLE_AUTO_INVITE === "true",
+  company_name: process.env.COMPANY_NAME || "Clínica Dental",
+  company_address: process.env.COMPANY_ADDRESS || "Dirección no especificada",
   // Turso config
   TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL,
   TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN,

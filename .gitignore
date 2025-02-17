@@ -1,6 +1,8 @@
 # build output
 dist/
 
+bun.lockb
+
 pnpm-lock.yaml
 
 # Credenciales y archivos sensibles

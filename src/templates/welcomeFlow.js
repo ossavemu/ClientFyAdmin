@@ -81,14 +81,75 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
       );
 
       if (isScheduleRequest) {
-        if (!config.enableAppointments) {
+        // Verificar qué tipos de citas están habilitados
+        const virtualEnabled = config.enableVirtualAppointments;
+        const inPersonEnabled = config.enableInPersonAppointments;
+
+        if (!virtualEnabled && !inPersonEnabled) {
           await typing(1, { ctx, ctxFn });
           return ctxFn.endFlow(
             "Lo siento, el servicio de citas no está disponible en este momento."
           );
         }
+
+        // Si solo un tipo está habilitado, usar ese directamente
+        if (virtualEnabled && !inPersonEnabled) {
+          await ctxFn.state.update({ appointmentType: "virtual" });
+          await typing(1, { ctx, ctxFn });
+          return ctxFn.gotoFlow(dateFlow);
+        }
+
+        if (!virtualEnabled && inPersonEnabled) {
+          await ctxFn.state.update({ appointmentType: "inPerson" });
+          await typing(1, { ctx, ctxFn });
+          return ctxFn.gotoFlow(dateFlow);
+        }
+
+        // Si ambos tipos están habilitados, preguntar al usuario
         await typing(1, { ctx, ctxFn });
-        return ctxFn.gotoFlow(dateFlow);
+        await ctxFn.flowDynamic(
+          "¿Qué tipo de cita prefieres?\n1. Virtual (por videollamada)\n2. Presencial"
+        );
+
+        // Esperar respuesta del usuario
+        await ctxFn.state.update({
+          waitingForAppointmentType: true,
+          lastMessage: bodyText,
+        });
+        return;
+      }
+
+      // Manejar la respuesta del tipo de cita si estamos esperando por ella
+      const state = await ctxFn.state.getMyState();
+      if (state?.waitingForAppointmentType) {
+        const response = bodyText.toLowerCase();
+        let appointmentType = null;
+
+        if (
+          response.includes("1") ||
+          response.includes("virtual") ||
+          response.includes("video")
+        ) {
+          appointmentType = "virtual";
+        } else if (response.includes("2") || response.includes("presencial")) {
+          appointmentType = "inPerson";
+        }
+
+        if (appointmentType) {
+          await ctxFn.state.update({
+            appointmentType,
+            waitingForAppointmentType: false,
+            body: state.lastMessage, // Restaurar el mensaje original
+          });
+          await typing(1, { ctx, ctxFn });
+          return ctxFn.gotoFlow(dateFlow);
+        } else {
+          await typing(1, { ctx, ctxFn });
+          await ctxFn.flowDynamic(
+            "Por favor, selecciona una opción válida:\n1. Virtual (por videollamada)\n2. Presencial"
+          );
+          return;
+        }
       }
 
       // Verificar si está solicitando documentos/archivos
@@ -265,17 +326,32 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
 
         // Construir mensaje de opciones
         let optionsMessage = "";
-        if (config.enableAppointments || hasDocuments || hasImages) {
+        const virtualEnabled = config.enableVirtualAppointments;
+        const inPersonEnabled = config.enableInPersonAppointments;
+        const appointmentsEnabled = virtualEnabled || inPersonEnabled;
+
+        if (appointmentsEnabled || hasDocuments || hasImages) {
           optionsMessage += "\n\nTambién puedes:";
-          if (config.enableAppointments)
-            optionsMessage +=
-              "\n- Agendar citas usando palabras como 'cita' o 'reservar'";
+          if (appointmentsEnabled) {
+            let citasMessage = "\n•⁠  ⁠Agendar citas";
+
+            if (virtualEnabled && inPersonEnabled) {
+              citasMessage += " (virtuales o presenciales)";
+            } else if (virtualEnabled) {
+              citasMessage += " virtuales";
+            } else if (inPersonEnabled) {
+              citasMessage += " presenciales";
+            }
+
+            citasMessage += " usando palabras como 'cita' o 'reservar'";
+            optionsMessage += citasMessage;
+          }
           if (hasDocuments)
             optionsMessage +=
-              "\n- Pedir documentos con términos como 'documento' o 'PDF'";
+              "\n•⁠  ⁠Pedir documentos con términos como 'documento' o 'PDF'";
           if (hasImages)
             optionsMessage +=
-              "\n- Solicitar imágenes usando 'fotos' o 'catálogo'";
+              "\n•⁠  ⁠Solicitar imágenes usando 'fotos' o 'catálogo'";
         }
 
         // Enviar respuesta combinada
