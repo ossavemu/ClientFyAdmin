@@ -2,6 +2,7 @@
 dist/
 
 bun.lockb
+bun.lock
 
 pnpm-lock.yaml
 

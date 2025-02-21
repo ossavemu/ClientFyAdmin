@@ -13,7 +13,7 @@ fi
 
 # Iniciar nueva sesión de screen
 echo "Iniciando $SESSION_NAME en screen..."
-screen -dmS $SESSION_NAME bash -c 'cd "$(dirname "$0")" && pnpm start; exec bash'
+screen -dmS $SESSION_NAME bash -c 'cd "$(dirname "$0")" && bun run src/app.js; exec bash'
 
 echo "Sesión iniciada correctamente"
 echo "Para ver los logs: screen -r $SESSION_NAME"
