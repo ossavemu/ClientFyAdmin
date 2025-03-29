@@ -129,15 +129,24 @@ export const chat = async (
       isFirstMessage &&
       question.toLowerCase().match(/^(hola|buenos|hi|hey)/)
     ) {
+      // Crear una versión personalizada del prompt con información específica de la empresa
+      const businessInfo = `
+        Representas a: ${config.company_name || "nuestra empresa"}
+        Ubicación: ${config.company_address || "dirección no especificada"}
+      `;
+
       const customInstructions = `
         ${config.defaultPrompt(userName)}
+        
+        ${businessInfo}
 
         Instrucciones adicionales:
         1. Preséntate como un asesor comercial profesional y amigable
-        2. Menciona brevemente los productos/servicios principales
+        2. Menciona brevemente nuestros productos/servicios principales
         3. Pregunta específicamente en qué puedes ayudar
         4. Mantén un tono entusiasta pero profesional
-        5. Incluye una frase que genere interés en los productos/servicios
+        5. Incluye una frase que genere interés en nuestros productos/servicios
+        6. Cuando sea relevante, menciona nuestra ubicación
         
         ${prompt}
       `;
@@ -148,10 +157,18 @@ export const chat = async (
         instructions: customInstructions,
       });
     } else {
+      // Crear una versión estándar del prompt con información específica de la empresa
+      const businessInfo = `
+        Representas a: ${config.company_name || "nuestra empresa"}
+        Ubicación: ${config.company_address || "dirección no especificada"}
+      `;
+
       // Usar las instrucciones normales para mensajes que no son de bienvenida
       run = await openai.beta.threads.runs.createAndPoll(thread.id, {
         assistant_id: assistantId,
-        instructions: `${config.defaultPrompt(userName)}\n\n${prompt}`,
+        instructions: `${config.defaultPrompt(
+          userName
+        )}\n\n${businessInfo}\n\n${prompt}`,
       });
     }
 
