@@ -58,6 +58,41 @@
           </table>
         </div>
       </div>
+
+      <!-- Modal para ver mensajes -->
+      <div
+        id="messagesModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+      >
+        <div
+          class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"
+        >
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">Historial de Mensajes</h2>
+            <button
+              onclick="closeMessagesModal()"
+              class="text-gray-500 hover:text-gray-700"
+            >
+              <svg
+                class="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                ></path>
+              </svg>
+            </button>
+          </div>
+          <div id="messagesContent" class="space-y-4">
+            <!-- Los mensajes se cargarán aquí dinámicamente -->
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Modal para selección de tiempo -->
@@ -168,7 +203,11 @@
                 ${isMuted ? "Silenciado" : "Activo"}
               </span>
             </td>
-            <td class="px-6 py-4 text-right">
+            <td class="px-6 py-4 text-right space-x-2">
+              <button onclick="showMessages('${user.phone_number}')" 
+                      class="px-4 py-2 text-sm rounded-full bg-blue-500 text-white hover:bg-blue-600">
+                Ver Mensajes
+              </button>
               ${
                 isMuted
                   ? `
@@ -191,11 +230,44 @@
         });
       }
 
-      // Escuchar nuevos usuarios
-      socket.on("newUser", (user) => {
-        activeUsers.set(user.phone_number, user);
-        updateUsersTable();
-      });
+      // Funciones para el modal de mensajes
+      async function showMessages(phoneNumber) {
+        try {
+          const response = await fetch("/api/history");
+          const users = await response.json();
+          const user = users.find((u) => u.phone_number === phoneNumber);
+
+          if (user && user.messages) {
+            const messagesContent = document.getElementById("messagesContent");
+            messagesContent.innerHTML = user.messages
+              .map(
+                (msg) => `
+              <div class="p-3 rounded-lg ${
+                msg.provider === "user"
+                  ? "bg-blue-100 ml-4"
+                  : "bg-gray-100 mr-4"
+              }">
+                <div class="text-sm text-gray-600 mb-1">
+                  ${new Date(msg.created_at).toLocaleString()}
+                </div>
+                <div class="text-gray-800">
+                  ${msg.content}
+                </div>
+              </div>
+            `
+              )
+              .join("");
+
+            document.getElementById("messagesModal").classList.remove("hidden");
+          }
+        } catch (error) {
+          console.error("Error cargando mensajes:", error);
+        }
+      }
+
+      function closeMessagesModal() {
+        document.getElementById("messagesModal").classList.add("hidden");
+      }
 
       function showMuteModal(phoneNumber) {
         selectedPhoneNumber = phoneNumber;

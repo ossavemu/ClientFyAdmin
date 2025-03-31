@@ -41,31 +41,80 @@ app.get("/", (req, res) => {
 // Endpoint para obtener el historial
 app.get("/api/history", async (req, res) => {
   try {
-    const botNumber = config.P_NUMBER; // Usar la configuración en lugar de process.env
+    const botNumber = config.P_NUMBER;
 
-    const history = await db.sql`
-      WITH unique_users AS (
-        SELECT DISTINCT
-          h.phone_number,
-          wu.name as user_name,
-          FIRST_VALUE(h.created_at) OVER (
-            PARTITION BY h.phone_number 
-            ORDER BY h.created_at DESC
-          ) as last_interaction,
-          COALESCE(mu.until, null) as muted_until
-        FROM historic h
-        LEFT JOIN ws_users wu ON h.phone_number = wu.phone_number
-        LEFT JOIN muted_users mu ON h.phone_number = mu.phone_number
-        WHERE h.phone_number != ${botNumber}
-        AND h.bot_number = ${botNumber}
-        AND h.provider = 'user'
-      )
-      SELECT * FROM unique_users
-      ORDER BY last_interaction DESC
-    `;
+    // Si el proveedor es meta, incluir los mensajes
+    if (config.PROVIDER === "meta") {
+      const history = await db.sql`
+        WITH unique_users AS (
+          SELECT DISTINCT
+            h.phone_number,
+            wu.name as user_name,
+            FIRST_VALUE(h.created_at) OVER (
+              PARTITION BY h.phone_number 
+              ORDER BY h.created_at DESC
+            ) as last_interaction,
+            COALESCE(mu.until, null) as muted_until
+          FROM historic h
+          LEFT JOIN ws_users wu ON h.phone_number = wu.phone_number
+          LEFT JOIN muted_users mu ON h.phone_number = mu.phone_number
+          WHERE h.phone_number != ${botNumber}
+          AND h.bot_number = ${botNumber}
+        )
+        SELECT 
+          u.*,
+          (
+            SELECT json_group_array(
+              json_object(
+                'content', h2.message_content,
+                'created_at', h2.created_at,
+                'provider', h2.provider
+              )
+            )
+            FROM historic h2
+            WHERE h2.phone_number = u.phone_number
+            AND h2.bot_number = ${botNumber}
+            ORDER BY h2.created_at DESC
+            LIMIT 50
+          ) as messages
+        FROM unique_users u
+        ORDER BY last_interaction DESC
+      `;
 
-    console.log("Usuarios encontrados:", history.length);
-    res.json(history);
+      // Procesar los mensajes JSON
+      const processedHistory = history.map((user) => ({
+        ...user,
+        messages: user.messages ? JSON.parse(user.messages) : [],
+      }));
+
+      console.log("Usuarios encontrados:", processedHistory.length);
+      res.json(processedHistory);
+    } else {
+      // Comportamiento original para otros proveedores
+      const history = await db.sql`
+        WITH unique_users AS (
+          SELECT DISTINCT
+            h.phone_number,
+            wu.name as user_name,
+            FIRST_VALUE(h.created_at) OVER (
+              PARTITION BY h.phone_number 
+              ORDER BY h.created_at DESC
+            ) as last_interaction,
+            COALESCE(mu.until, null) as muted_until
+          FROM historic h
+          LEFT JOIN ws_users wu ON h.phone_number = wu.phone_number
+          LEFT JOIN muted_users mu ON h.phone_number = mu.phone_number
+          WHERE h.phone_number != ${botNumber}
+          AND h.bot_number = ${botNumber}
+          AND h.provider = 'user'
+        )
+        SELECT * FROM unique_users
+        ORDER BY last_interaction DESC
+      `;
+
+      console.log("Usuarios encontrados:", history.length);
+      res.json(history);
+    }
   } catch (error) {
     console.error("Error en /api/history:", error);
     res.status(500).json({ error: error.message });
