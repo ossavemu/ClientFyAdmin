@@ -249,6 +249,27 @@ export const wsUserService = {
     }
   },
 
+  async getInteractionHistory(phoneNumber, limit = 10) {
+    try {
+      logger.debug(`Obteniendo historial de interacciones para ${phoneNumber}`);
+
+      const history = await db.sql`
+        SELECT * FROM historic
+        WHERE phone_number = ${phoneNumber}
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
+
+      logger.debug(
+        `Se encontraron ${history.length} interacciones para ${phoneNumber}`
+      );
+      return history;
+    } catch (error) {
+      logger.error("Error en getInteractionHistory", error);
+      throw error;
+    }
+  },
+
   async getRecentHistory(phoneNumber, limit = 10) {
     try {
       return await db.sql`

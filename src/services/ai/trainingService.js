@@ -43,8 +43,6 @@ export const TRAINING_KEYWORDS = [
   "menu",
   "menú",
   "carta",
-  "precios",
-  "precio",
   "catalogo",
   "catálogo",
   "pdf",

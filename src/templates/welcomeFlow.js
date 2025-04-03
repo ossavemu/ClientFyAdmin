@@ -15,13 +15,49 @@ import {
 } from "../web/socket.js";
 import { dateFlow } from "./dateFlow.js";
 
+// Caché simple para deduplicación de mensajes recientes
+const recentMessages = new Map();
+const DEDUPLICATION_WINDOW_MS = 2000; // Ignorar mensajes idénticos dentro de 2 segundos
+
 export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
   async (ctx, ctxFn) => {
     try {
+      const currentTime = Date.now();
+      const lastMessageTime = recentMessages.get(ctx.from);
+
+      // Lógica de Deduplicación
+      if (
+        lastMessageTime &&
+        currentTime - lastMessageTime < DEDUPLICATION_WINDOW_MS
+      ) {
+        logger.warn(
+          `[DEDUPLICATE] Mensaje duplicado ignorado de ${ctx.from} (dentro de ${DEDUPLICATION_WINDOW_MS}ms)`
+        );
+        return; // Ignorar este mensaje
+      }
+      recentMessages.set(ctx.from, currentTime);
+      // Limpiar entradas antiguas del caché ocasionalmente (opcional, para evitar crecimiento indefinido)
+      if (Math.random() < 0.1) {
+        // Limpiar aproximadamente 10% de las veces
+        const cutoff = currentTime - DEDUPLICATION_WINDOW_MS * 10; // Mantener los últimos 20 segundos
+        for (const [key, time] of recentMessages.entries()) {
+          if (time < cutoff) {
+            recentMessages.delete(key);
+          }
+        }
+      }
+
       const bodyText = ctx.body.toLowerCase().trim();
       const phoneNumber = ctx.from;
       const isFirstMessage = ctxFn.state.get("firstMessage") === undefined;
       if (isFirstMessage) await ctxFn.state.update({ firstMessage: false });
+
+      logger.info(
+        `[WELCOME] Procesando mensaje de ${phoneNumber}: "${bodyText.substring(
+          0,
+          50
+        )}..."`
+      );
 
       // Registrar el handler para enviar mensajes
       registerMessageHandler(async (targetPhone, message) => {
@@ -279,47 +315,48 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
         );
       }
 
-      const response = await chat(
-        ctx.body,
-        botNumber,
-        ctx.name,
-        ctxFn.state.get("thread") ?? null
-      );
-      await ctxFn.state.update({ thread: response.thread });
-
-      // Si hay un archivo para enviar (quitamos la verificación de enableAutoInvite)
-      if (response.media) {
-        await typing(1, { ctx, ctxFn });
-        try {
-          await ctxFn.flowDynamic([
-            {
-              body: response.response,
-              media: response.media.path,
-              filename: response.media.filename,
-              mimeType: response.media.mimetype,
-            },
-          ]);
-        } catch (error) {
-          logger.error("Error enviando archivo:", error);
-          return ctxFn.endFlow(
-            "Lo siento, hubo un error al enviar el archivo. Por favor, intenta nuevamente."
-          );
-        } finally {
-          // Limpiar archivo temporal
-          if (response.media.path && fs.existsSync(response.media.path)) {
-            fs.unlinkSync(response.media.path);
-          }
-        }
-        return ctxFn.endFlow();
-      }
-
       // Notificar al panel web sobre el nuevo usuario
       await notifyNewUser(phoneNumber, ctx.name);
 
       // Modificar la sección de estado
       const currentState = (await ctxFn.state.getMyState()) || {};
 
-      if (!currentState.hasInteracted) {
+      // Crear clave de cache para verificar si ya existe un thread en la caché global
+      const cacheKey = `${botNumber}:${phoneNumber}`;
+
+      // Detectar si es primera interacción o no
+      let isFirstInteraction = isFirstMessage;
+
+      // Comprobar si hay interacciones previas en la base de datos
+      try {
+        // Obtener el historial de interacciones del usuario
+        const previousInteractions = await wsUserService.getInteractionHistory(
+          phoneNumber
+        );
+        // Si hay más de una interacción, no es la primera
+        if (previousInteractions && previousInteractions.length > 1) {
+          isFirstInteraction = false;
+          logger.debug(
+            `[WELCOME] No es primera interacción para ${phoneNumber}, tiene ${previousInteractions.length} interacciones previas`
+          );
+        }
+      } catch (error) {
+        logger.error(
+          `[WELCOME] Error verificando interacciones previas: ${error.message}`
+        );
+      }
+
+      // Obtener respuesta del servicio de chat
+      const response = await chat(
+        ctx.body,
+        botNumber,
+        ctx.name,
+        null // Forzar la creación de un nuevo thread cada vez
+      );
+      await ctxFn.state.update({ thread: response.thread });
+
+      if (isFirstInteraction) {
+        // Es primera interacción, incluir opciones adicionales
         // Obtener opciones disponibles
         const hasDocuments =
           (await trainingService.getTrainingFiles(botNumber)).length > 0;

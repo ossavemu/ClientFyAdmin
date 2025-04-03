@@ -20,7 +20,42 @@ const getOpenAI = () => {
 // Caché para los vectorStores creados (se migrará gradualmente a cacheService)
 export const vectorStoreCache = new Map();
 // Caché para los threads para evitar creaciones repetidas (se migrará a cacheService)
-const threadCache = new Map();
+export const threadCache = new Map();
+
+// Función para limpiar la caché de threads
+export const clearThreadCache = (userPhoneNumber = null) => {
+  const botNumber = config.P_NUMBER;
+
+  if (userPhoneNumber) {
+    // Limpiar thread para un usuario específico
+    const cacheKey = `${botNumber}:${userPhoneNumber}`;
+    const threadId = threadCache.has(cacheKey)
+      ? threadCache.get(cacheKey).id
+      : "desconocido";
+    threadCache.delete(cacheKey);
+    logger.info(
+      `✅ Thread ${threadId} eliminado de caché para usuario ${userPhoneNumber}`
+    );
+
+    // También limpiar del caché centralizado si existe
+    if (cacheService.threads.has(cacheKey)) {
+      cacheService.threads.delete(cacheKey);
+      logger.info(
+        `✅ Thread también eliminado del caché centralizado para usuario ${userPhoneNumber}`
+      );
+    }
+
+    return true;
+  } else {
+    // Limpiar todos los threads
+    const count = threadCache.size;
+    threadCache.clear();
+    logger.info(
+      `✅ Caché completa de threads limpiada (${count} threads eliminados)`
+    );
+    return true;
+  }
+};
 
 // Función para almacenar un vector store en la caché (usado en la inicialización)
 export const cacheVectorStore = (botNumber, vectorStoreId) => {
@@ -200,27 +235,22 @@ export const chat = async (
       config.provider
     );
 
-    // Determinar si es un nuevo thread o usar uno existente
-    const isFirstMessage = !thread;
-    if (!thread) {
-      // Usar thread de caché si existe
-      if (threadCache.has(cacheKey)) {
-        thread = threadCache.get(cacheKey);
-        logger.debug(`Usando thread en caché: ${thread.id}`);
-      } else {
-        // Crear nuevo thread
-        thread = await openai.beta.threads.create();
-        threadCache.set(cacheKey, thread);
-        logger.debug(`Nuevo thread creado y almacenado en caché: ${thread.id}`);
+    // SOLUCIÓN: Crear siempre un nuevo thread para evitar respuestas repetitivas
+    // No reutilizar threads de la caché
+    logger.debug(
+      `[CHATGPT] Creando nuevo thread para pregunta: ${question.substring(
+        0,
+        30
+      )}...`
+    );
+    thread = await openai.beta.threads.create();
+    logger.debug(`[CHATGPT] Nuevo thread creado: ${thread.id}`);
 
-        // Verificar si hay vector store o necesitamos crearlo - en segundo plano
-        if (!vectorStoreCache.has(botNumber)) {
-          getOrCreateVectorStore(botNumber, assistantId).catch((err) =>
-            logger.error("Error creando vector store en segundo plano:", err)
-          );
-        }
-      }
-    }
+    // Almacenar el nuevo thread en caché
+    threadCache.set(cacheKey, thread);
+
+    // También almacenar en el caché centralizado
+    cacheService.threads.set(cacheKey, thread);
 
     // Agregar el mensaje del usuario al thread
     await openai.beta.threads.messages.create(thread.id, {
@@ -234,15 +264,81 @@ export const chat = async (
       Ubicación: ${config.company_address || "dirección no especificada"}
     `;
 
+    // IMPORTANTE: Añadir instrucción específica para evitar mensajes de bienvenida repetitivos
+    const additionalInstruction = `
+      INSTRUCCIÓN IMPORTANTE: 
+      1. Responde directamente a la pregunta del usuario.
+      2. NO repitas mensajes de bienvenida o introducciones si el usuario ya está haciendo preguntas específicas.
+      3. Si el usuario pregunta por información específica como precios, web page, características, responde con esa información exacta.
+      4. Mantén un tono profesional pero conversacional, contestando lo que se te pregunta.
+    `;
+
     const instructions = `${config.defaultPrompt(
       userName
-    )}\n\n${businessInfo}\n\n${customPrompt}`;
+    )}\n\n${businessInfo}\n\n${customPrompt}\n\n${additionalInstruction}`;
 
     // Ejecutar el asistente
+    logger.debug(
+      `[CHATGPT] Ejecutando asistente ${assistantId} en thread ${thread.id}`
+    );
+
+    // Verificar y cancelar ejecuciones activas anteriores en el mismo thread
+    try {
+      const runs = await openai.beta.threads.runs.list(thread.id, { limit: 5 }); // Revisar las últimas 5 por si acaso
+      const activeRuns = runs.data.filter((run) =>
+        ["queued", "in_progress", "cancelling"].includes(run.status)
+      );
+
+      if (activeRuns.length > 0) {
+        logger.warn(
+          `[CHATGPT] ⚠️ Encontradas ${activeRuns.length} ejecuciones activas para thread ${thread.id}. Intentando cancelar...`
+        );
+        for (const activeRun of activeRuns) {
+          logger.debug(
+            `[CHATGPT] Cancelando run ${activeRun.id} con estado ${activeRun.status}`
+          );
+          try {
+            await openai.beta.threads.runs.cancel(thread.id, activeRun.id);
+            logger.info(`[CHATGPT] ✅ Ejecución ${activeRun.id} cancelada.`);
+          } catch (cancelError) {
+            // Si el error es porque la ejecución ya no está activa (se completó/falló mientras tanto), ignorarlo
+            if (
+              cancelError.status === 400 &&
+              cancelError.message.includes("cannot be cancelled")
+            ) {
+              logger.warn(
+                `[CHATGPT] No se pudo cancelar la ejecución ${activeRun.id} (probablemente ya terminó): ${cancelError.message}`
+              );
+            } else {
+              logger.error(
+                `[CHATGPT] ❌ Error al cancelar la ejecución ${activeRun.id}`,
+                cancelError
+              );
+              // Decidir si continuar o no - por ahora continuaremos
+            }
+          }
+        }
+        // Dar un pequeño respiro para que la cancelación se procese
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    } catch (listRunError) {
+      logger.error(
+        `[CHATGPT] ❌ Error al listar ejecuciones para ${thread.id}`,
+        listRunError
+      );
+      // Continuar de todos modos, pero registrar el error
+    }
+
+    // Crear y esperar la nueva ejecución
+    logger.debug(`[CHATGPT] Creando nueva ejecución para thread ${thread.id}`);
     const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
       assistant_id: assistantId,
       instructions: instructions,
     });
+
+    logger.info(
+      `[CHATGPT] ✅ Ejecución ${run.id} completada con estado: ${run.status}`
+    );
 
     // Procesar respuesta
     if (run.status === "completed") {
