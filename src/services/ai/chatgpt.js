@@ -1,12 +1,15 @@
 import fs from "fs";
 import OpenAI from "openai";
 import { config } from "../../config/index.js";
-import { wsUserService } from "../data/wsUserService.js";
 import { assistantService } from "./assistantService.js";
 import { getPrompt } from "./promptService.js";
 import { trainingService } from "./trainingService.js";
 
-const openaiApiKey = config.openai_apikey;
+// Inicializar OpenAI una sola vez
+const openai = new OpenAI({ apiKey: config.openai_apikey });
+
+// Caché para los vectorStores creados
+const vectorStoreCache = new Map();
 
 // Función para formatear el número de teléfono
 const formatPhoneNumber = (phone) => {
@@ -31,6 +34,69 @@ const formatPhoneNumber = (phone) => {
   return formatted;
 };
 
+// Función para obtener o crear un vector store para el asistente
+async function getOrCreateVectorStore(botNumber, assistantId) {
+  // Verificar si ya tenemos un vector store en caché
+  if (vectorStoreCache.has(botNumber)) {
+    console.log(`Usando vectorStore en caché para ${botNumber}`);
+    return vectorStoreCache.get(botNumber);
+  }
+
+  console.log(`Creando nuevo vectorStore para ${botNumber}`);
+
+  // Obtener archivos de entrenamiento
+  const trainingFiles = await trainingService.getTrainingFiles(botNumber);
+  if (trainingFiles.length === 0) {
+    console.log("No hay archivos de entrenamiento disponibles");
+    return null;
+  }
+
+  try {
+    // Subir archivos a OpenAI
+    console.log("Subiendo archivos a OpenAI...");
+    const filePromises = trainingFiles.map(async (file) => {
+      const uploadedFile = await openai.files.create({
+        file: fs.createReadStream(file.localPath),
+        purpose: "assistants",
+      });
+      return uploadedFile.id;
+    });
+
+    const fileIds = await Promise.all(filePromises);
+
+    // Crear vector store
+    const vectorStore = await openai.beta.vectorStores.create({
+      name: `VectorStore-${botNumber}-${Date.now()}`,
+      file_ids: fileIds,
+    });
+
+    // Actualizar el assistant con el vector store
+    await openai.beta.assistants.update(assistantId, {
+      tool_resources: {
+        file_search: {
+          vector_store_ids: [vectorStore.id],
+        },
+      },
+    });
+
+    // Guardar en caché
+    vectorStoreCache.set(botNumber, vectorStore.id);
+
+    // Limpiar archivos temporales
+    trainingFiles.forEach((file) => {
+      if (file.localPath && fs.existsSync(file.localPath)) {
+        console.log("Limpiando archivo temporal:", file.localPath);
+        fs.unlinkSync(file.localPath);
+      }
+    });
+
+    return vectorStore.id;
+  } catch (error) {
+    console.error("Error creando vectorStore:", error);
+    return null;
+  }
+}
+
 export const chat = async (
   question,
   userPhoneNumber,
@@ -50,10 +116,15 @@ export const chat = async (
       "provider:",
       provider
     );
-    const openai = new OpenAI({ apiKey: openaiApiKey });
 
     // Obtener el prompt desde la API
     const prompt = await getPrompt(botNumber);
+
+    // Obtener o crear el assistant_id para este bot
+    const assistantId = await assistantService.getOrCreateAssistant(
+      botNumber,
+      config.provider
+    );
 
     // Si no hay thread, crear uno nuevo
     if (!thread) {
@@ -61,58 +132,11 @@ export const chat = async (
       thread = await openai.beta.threads.create();
       console.log("Nuevo thread creado:", thread.id);
 
-      // Obtener y subir archivos de entrenamiento
-      const trainingFiles = await trainingService.getTrainingFiles(botNumber);
-      if (trainingFiles.length > 0) {
-        console.log("Subiendo archivos a OpenAI...");
-
-        // Subir archivos y crear vector store
-        const filePromises = trainingFiles.map(async (file) => {
-          const uploadedFile = await openai.files.create({
-            file: fs.createReadStream(file.localPath),
-            purpose: "assistants",
-          });
-          return uploadedFile.id;
-        });
-
-        const fileIds = await Promise.all(filePromises);
-
-        // Crear vector store
-        const vectorStore = await openai.beta.vectorStores.create({
-          name: `VectorStore-${botNumber}-${Date.now()}`,
-          file_ids: fileIds,
-        });
-
-        // Actualizar el assistant con el vector store
-        const assistantId = await assistantService.getOrCreateAssistant(
-          botNumber,
-          config.provider
-        );
-        await openai.beta.assistants.update(assistantId, {
-          tool_resources: {
-            file_search: {
-              vector_store_ids: [vectorStore.id],
-            },
-          },
-        });
-
-        // Limpiar archivos temporales
-        trainingFiles.forEach((file) => {
-          if (file.localPath && fs.existsSync(file.localPath)) {
-            console.log("Limpiando archivo temporal:", file.localPath);
-            fs.unlinkSync(file.localPath);
-          }
-        });
-      }
+      // Si no existe un vectorStore para este bot, crear uno
+      await getOrCreateVectorStore(botNumber, assistantId);
     } else {
       console.log("Usando thread existente:", thread.id);
     }
-
-    // Obtener el assistant_id para este bot
-    const assistantId = await assistantService.getOrCreateAssistant(
-      botNumber,
-      config.provider
-    );
 
     // Agregar el mensaje del usuario al thread
     console.log("Agregando mensaje al thread...");
@@ -251,70 +275,41 @@ export const chat = async (
         });
 
         if (fileToSend) {
-          const processedFile = await trainingService.downloadAndProcessFile(
-            fileToSend.url,
-            fileToSend.name
-          );
+          // Preparar archivo para envío
           return {
             thread,
-            response: "Enviando el archivo solicitado...",
-            media: {
-              path: processedFile.path,
-              filename: fileToSend.name,
-              mimetype: processedFile.mimeType,
-            },
+            response: `¡Aquí tienes el archivo "${fileToSend.name}"!`,
+            file: fileToSend,
           };
         } else {
-          // Si no se encuentra el archivo, volver a mostrar la lista
-          const fileList = files
-            .map((f, index) => `${index + 1}. ${f.name}`)
-            .join("\n");
           return {
             thread,
-            response: `No encontré ese documento. Aquí están los disponibles:\n${fileList}\n\nPuedes pedirme cualquiera por su nombre o número. ¿Cuál te gustaría recibir?`,
+            response: `Lo siento, no pude encontrar el archivo "${fileName}". Por favor, intenta con otro nombre.`,
           };
         }
       }
 
-      const cleanAnswer = answer.replace(/【\d+:\d+†source/g, "");
-
-      // Registrar la respuesta del bot en el histórico
-      if (assistantResponse) {
-        await wsUserService.logInteraction(
-          botNumber,
-          "text",
-          assistantResponse.content[0].text.value,
-          provider
-        );
-      }
-
+      return { thread, response: answer };
+    } else if (run.status === "failed") {
+      console.log("Run falló:", run.error);
       return {
         thread,
-        response: cleanAnswer,
+        response: `Lo siento, ocurrió un error: ${run.error.message}`,
       };
-    }
-
-    // Si el run no se completó
-    if (run.status === "failed") {
-      console.error("Run falló con error:", run.last_error);
+    } else {
+      console.log("Run no completado, estado:", run.status);
       return {
         thread,
         response:
-          "Lo siento, hubo un problema procesando tu mensaje. Por favor, intenta nuevamente.",
+          "Lo siento, no pude completar la operación. Por favor, intenta de nuevo más tarde.",
       };
     }
-
-    console.log("Run no completado, estado:", run.status);
+  } catch (error) {
+    console.error("Error en chat:", error);
     return {
-      thread,
+      thread: null,
       response:
-        "Lo siento, hubo un problema procesando tu mensaje. Por favor, intenta nuevamente.",
-    };
-  } catch (err) {
-    console.error("Error al conectar con OpenAI:", err);
-    return {
-      thread,
-      response: "Lo siento, ocurrió un error. Por favor, intenta nuevamente.",
+        "Lo siento, ocurrió un error. Por favor, intenta de nuevo más tarde.",
     };
   }
 };

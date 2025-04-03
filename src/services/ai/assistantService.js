@@ -6,6 +6,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || config.openai_apikey,
 });
 
+// Caché en memoria para asistentes
+const assistantCache = new Map();
+
 // Función para formatear el número de teléfono según el provider
 const formatPhoneNumber = (phone, provider = "meta") => {
   if (provider === "meta") {
@@ -57,6 +60,16 @@ const formatPhoneNumber = (phone, provider = "meta") => {
 };
 
 export const assistantService = {
+  // Limpiar la caché (útil para testing o reinicio manual)
+  clearCache() {
+    assistantCache.clear();
+  },
+
+  // Verificar si un asistente está en caché
+  isAssistantCached(botNumber) {
+    return assistantCache.has(botNumber);
+  },
+
   async registerBotNumber(phoneNumber, provider) {
     try {
       const formattedPhone =
@@ -80,6 +93,12 @@ export const assistantService = {
 
   async getOrCreateAssistant(botNumber) {
     try {
+      // Verificar primero en la caché
+      if (assistantCache.has(botNumber)) {
+        console.log(`Usando asistente en caché para ${botNumber}`);
+        return assistantCache.get(botNumber);
+      }
+
       // Buscar asistente existente para este bot
       const existingAssistant = await db.sql`
         SELECT assistant_id 
@@ -147,6 +166,8 @@ export const assistantService = {
         assistantId = assistant.id;
       }
 
+      // Guardar en caché
+      assistantCache.set(botNumber, assistantId);
       return assistantId;
     } catch (error) {
       console.error("Error in getOrCreateAssistant:", error);

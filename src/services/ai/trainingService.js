@@ -20,6 +20,13 @@ const MIME_TYPES = {
   txt: "text/plain",
 };
 
+// Caché de archivos de entrenamiento
+const trainingFilesCache = new Map();
+// TTL para la caché (en milisegundos) - 1 hora por defecto
+const CACHE_TTL = 60 * 60 * 1000;
+// Timestamp de la última actualización de la caché
+let lastCacheUpdate = 0;
+
 // Palabras clave para detectar solicitudes de documentos
 export const TRAINING_KEYWORDS = [
   "documentos",
@@ -47,9 +54,35 @@ export const TRAINING_KEYWORDS = [
 ];
 
 export const trainingService = {
-  async getTrainingFiles(phoneNumber) {
+  // Limpiar caché de archivos
+  clearCache() {
+    trainingFilesCache.clear();
+    lastCacheUpdate = 0;
+    console.log("Caché de archivos de entrenamiento limpiada");
+  },
+
+  // Forzar actualización de la caché
+  async refreshCache(phoneNumber) {
+    this.clearCache();
+    return this.getTrainingFiles(phoneNumber, true);
+  },
+
+  async getTrainingFiles(phoneNumber, forceRefresh = false) {
     try {
       console.log("🔍 Obteniendo archivos para P_NUMBER:", config.P_NUMBER);
+
+      // Verificar si la caché aún es válida y si hay datos en caché
+      const now = Date.now();
+      if (
+        !forceRefresh &&
+        trainingFilesCache.has(phoneNumber) &&
+        now - lastCacheUpdate < CACHE_TTL
+      ) {
+        console.log("Usando archivos en caché para:", phoneNumber);
+        return trainingFilesCache.get(phoneNumber);
+      }
+
+      console.log("Obteniendo archivos frescos desde la API...");
       const response = await fetch(
         `${config.training_files_url}?phoneNumber=${config.P_NUMBER}`
       );
@@ -62,6 +95,12 @@ export const trainingService = {
 
       if (!data.success || !Array.isArray(data.files)) {
         return [];
+      }
+
+      // Crear directorio temporal si no existe
+      const tempDir = path.join(__dirname, "../../temp");
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
       }
 
       // Procesar archivos y descargarlos localmente
@@ -84,9 +123,20 @@ export const trainingService = {
         })
       );
 
-      return processedFiles.filter((file) => file !== null);
+      const validFiles = processedFiles.filter((file) => file !== null);
+
+      // Actualizar la caché
+      trainingFilesCache.set(phoneNumber, validFiles);
+      lastCacheUpdate = now;
+
+      return validFiles;
     } catch (error) {
       console.error("Error en trainingService:", error);
+      // Si hay un error, devolver la caché si existe
+      if (trainingFilesCache.has(phoneNumber)) {
+        console.log("Devolviendo caché debido a error en la API");
+        return trainingFilesCache.get(phoneNumber);
+      }
       return [];
     }
   },
@@ -121,6 +171,9 @@ export const trainingService = {
         console.log("❌ Error en la subida:", data.error);
         return { success: false, error: data.error };
       }
+
+      // Después de una subida exitosa, invalidar la caché
+      this.clearCache();
 
       console.log("✅ Archivos subidos exitosamente");
       return { success: true, files: data.files };

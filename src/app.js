@@ -1,5 +1,7 @@
 import { createBot, MemoryDB as Database } from "@builderbot/bot";
 import { config } from "./config/index.js";
+import { assistantService } from "./services/ai/assistantService.js";
+import { trainingService } from "./services/ai/trainingService.js";
 import { databaseService } from "./services/data/databaseService.js";
 import { reminder } from "./services/features/reminder.js";
 import { botService } from "./services/setup/botService.js";
@@ -7,6 +9,29 @@ import { logger } from "./services/setup/logger.js";
 import { providerService } from "./services/setup/providerService.js";
 import templates from "./templates/index.js";
 import { webServer } from "./web/server.js";
+
+// Función para precargar recursos de AI
+const preloadAIResources = async (botNumber) => {
+  try {
+    logger.info("Precargando recursos de IA...");
+
+    // Obtener el asistente (o crearlo si no existe)
+    const assistantId = await assistantService.getOrCreateAssistant(
+      botNumber,
+      config.provider
+    );
+    logger.info(`Asistente cargado con ID: ${assistantId}`);
+
+    // Precargar archivos de entrenamiento
+    const trainingFiles = await trainingService.getTrainingFiles(botNumber);
+    logger.info(`Archivos de entrenamiento cargados: ${trainingFiles.length}`);
+
+    return { assistantId, trainingFiles };
+  } catch (error) {
+    logger.error("Error precargando recursos de IA:", error);
+    return { assistantId: null, trainingFiles: [] };
+  }
+};
 
 const main = async () => {
   try {
@@ -17,6 +42,9 @@ const main = async () => {
     const { provider: adapterProvider, botNumber } =
       providerService.getProvider();
     await databaseService.registerBot(botNumber, config.provider);
+
+    // Precargar recursos de IA
+    await preloadAIResources(botNumber);
 
     const adapterDB = new Database();
     const { httpServer } = await createBot({
