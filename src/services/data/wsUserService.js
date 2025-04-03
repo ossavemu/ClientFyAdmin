@@ -3,12 +3,44 @@ import { agendaSchema } from "../../schemas/agenda.js";
 import { historicSchema, wsUserSchema } from "../../schemas/wsUser.js";
 
 export const wsUserService = {
+  async registerBot() {
+    try {
+      const botNumber = process.env.P_NUMBER;
+      const provider = process.env.PROVIDER || "baileys";
+
+      console.log("Registrando bot:", { botNumber, provider });
+
+      // Registrar el bot en ws_users
+      await db.sql`
+        INSERT INTO ws_users (phone_number, name)
+        VALUES (${botNumber}, ${`Bot ${provider}`})
+        ON CONFLICT (phone_number) DO NOTHING
+      `;
+
+      // Registrar el bot en bot_numbers
+      const botResult = await db.sql`
+        INSERT INTO bot_numbers (phone_number, provider)
+        VALUES (${botNumber}, ${provider})
+        ON CONFLICT (phone_number) DO NOTHING
+        RETURNING *
+      `;
+
+      console.log("Bot registrado:", botResult[0]);
+      return botResult[0];
+    } catch (error) {
+      console.error("Error registrando bot:", error);
+      throw error;
+    }
+  },
+
   async createOrUpdateUser(phoneNumber, name) {
     try {
       const userData = wsUserSchema.parse({
         phone_number: phoneNumber,
         name,
       });
+
+      console.log("Creando/actualizando usuario:", userData);
 
       const result = await db.sql`
         INSERT INTO ws_users (phone_number, name)
@@ -20,6 +52,7 @@ export const wsUserService = {
         RETURNING *
       `;
 
+      console.log("Usuario creado/actualizado:", result[0]);
       return result[0];
     } catch (error) {
       console.error("Error in createOrUpdateUser:", error);
@@ -35,13 +68,51 @@ export const wsUserService = {
     botNumber = process.env.P_NUMBER
   ) {
     try {
+      console.log("Iniciando logInteraction con:", {
+        phoneNumber,
+        botNumber,
+        provider,
+      });
+
+      // Asegurarnos que el bot está registrado
+      await this.registerBot();
+
+      // Primero crear/actualizar el usuario para obtener el número correcto
+      const user = await this.createOrUpdateUser(phoneNumber);
+      console.log("Usuario después de createOrUpdateUser:", user);
+
+      // Usar el número de teléfono que se usó para crear/actualizar el usuario
+      const formattedNumber = user.phone_number;
+
+      // Verificar si el bot existe
+      const existingBot = await db.sql`
+        SELECT * FROM bot_numbers WHERE phone_number = ${botNumber}
+      `;
+      console.log("Bot existente:", existingBot[0]);
+
+      // Verificar que ambos existen antes de continuar
+      const finalUserCheck = await db.sql`
+        SELECT * FROM ws_users WHERE phone_number = ${formattedNumber}
+      `;
+      const finalBotCheck = await db.sql`
+        SELECT * FROM bot_numbers WHERE phone_number = ${botNumber}
+      `;
+
+      if (!finalUserCheck[0] || !finalBotCheck[0]) {
+        throw new Error(`No se pudo verificar la existencia de usuario o bot: 
+          Usuario: ${JSON.stringify(finalUserCheck[0])}
+          Bot: ${JSON.stringify(finalBotCheck[0])}`);
+      }
+
       const interactionData = historicSchema.parse({
-        phone_number: phoneNumber,
+        phone_number: formattedNumber,
         bot_number: botNumber,
         message_type: messageType,
         message_content: content,
         provider,
       });
+
+      console.log("Intentando insertar en historic:", interactionData);
 
       await db.sql`
         INSERT INTO historic (
@@ -59,8 +130,10 @@ export const wsUserService = {
           ${interactionData.provider}
         )
       `;
+
+      console.log("Inserción en historic exitosa");
     } catch (error) {
-      console.error("Error in logInteraction:", error);
+      console.error("Error detallado en logInteraction:", error);
       throw error;
     }
   },

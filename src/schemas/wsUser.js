@@ -5,17 +5,16 @@ export const wsUserSchema = z
     phone_number: z
       .string()
       .transform((val) => {
-        // Limpiar y formatear el número
-        const cleaned = val.replace(/\D/g, "");
-        return cleaned.startsWith("57") ? cleaned : `57${cleaned}`;
+        // Solo limpiar el número, sin agregar prefijo
+        return val.replace(/\D/g, "");
       })
       .refine(
-        (val) => val.length >= 12,
-        "El número de teléfono debe tener al menos 12 dígitos (incluyendo el prefijo 57)"
+        (val) => val.length >= 10,
+        "El número de teléfono debe tener al menos 10 dígitos"
       )
       .refine(
-        (val) => /^57[0-9]{10,}$/.test(val),
-        "El número debe comenzar con 57 seguido de al menos 10 dígitos"
+        (val) => /^[0-9]{10,}$/.test(val),
+        "El número debe contener solo dígitos y tener al menos 10 caracteres"
       ),
 
     name: z

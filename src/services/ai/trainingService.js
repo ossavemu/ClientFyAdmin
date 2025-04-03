@@ -25,7 +25,6 @@ export const TRAINING_KEYWORDS = [
   "documentos",
   "archivos",
   "material",
-  "información",
   "manual",
   "manuales",
   "instructivo",
@@ -43,7 +42,8 @@ export const TRAINING_KEYWORDS = [
   "documento",
   "archivo",
   "materiales",
-  "info",
+  "presentación",
+  "presentacion",
 ];
 
 export const trainingService = {
