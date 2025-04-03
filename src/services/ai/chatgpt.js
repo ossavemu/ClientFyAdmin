@@ -12,6 +12,18 @@ const openai = new OpenAI({ apiKey: config.openai_apikey });
 // Caché para los vectorStores creados
 const vectorStoreCache = new Map();
 
+// Función para almacenar un vector store en la caché (usado en la inicialización)
+export const cacheVectorStore = (botNumber, vectorStoreId) => {
+  if (botNumber && vectorStoreId) {
+    vectorStoreCache.set(botNumber, vectorStoreId);
+    logger.info(
+      `Vector store ${vectorStoreId} almacenado en caché para bot ${botNumber}`
+    );
+    return true;
+  }
+  return false;
+};
+
 // Función para formatear el número de teléfono
 const formatPhoneNumber = (phone) => {
   logger.trace(`Formateando número de teléfono: ${phone}`);
@@ -45,7 +57,9 @@ async function getOrCreateVectorStore(botNumber, assistantId) {
     return vectorStoreCache.get(botNumber);
   }
 
-  logger.info(`Creando nuevo vectorStore para ${botNumber}`);
+  logger.info(
+    `No se encontró vectorStore en caché para ${botNumber}, creando uno nuevo...`
+  );
 
   // Obtener archivos de entrenamiento
   const trainingFiles = await trainingService.getTrainingFiles(botNumber);
@@ -84,14 +98,9 @@ async function getOrCreateVectorStore(botNumber, assistantId) {
 
     // Guardar en caché
     vectorStoreCache.set(botNumber, vectorStore.id);
-
-    // Limpiar archivos temporales
-    trainingFiles.forEach((file) => {
-      if (file.localPath && fs.existsSync(file.localPath)) {
-        logger.trace(`Limpiando archivo temporal: ${file.localPath}`);
-        fs.unlinkSync(file.localPath);
-      }
-    });
+    logger.info(
+      `Nuevo vector store creado y almacenado en caché: ${vectorStore.id}`
+    );
 
     return vectorStore.id;
   } catch (error) {
@@ -131,8 +140,15 @@ export const chat = async (
       thread = await openai.beta.threads.create();
       logger.debug(`Nuevo thread creado: ${thread.id}`);
 
-      // Si no existe un vectorStore para este bot, crear uno
-      await getOrCreateVectorStore(botNumber, assistantId);
+      // Verificar si ya existe un vector store en la caché
+      if (!vectorStoreCache.has(botNumber)) {
+        logger.debug(
+          "No se encontró vector store en caché, verificando si es necesario crearlo"
+        );
+        await getOrCreateVectorStore(botNumber, assistantId);
+      } else {
+        logger.debug(`Vector store encontrado en caché para ${botNumber}`);
+      }
     } else {
       logger.debug(`Usando thread existente: ${thread.id}`);
     }
