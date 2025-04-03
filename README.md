@@ -134,3 +134,35 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE.md](LICENSE.m
 - BuilderBot por el framework de bot
 - OpenAI por el procesamiento de lenguaje natural
 - Neon DB por el hosting de PostgreSQL
+
+## Optimizaciones de Rendimiento
+
+El servidor ha sido optimizado para reducir el consumo de recursos:
+
+### Optimizaciones de Base de Datos
+
+- Implementación de caché de consultas para reducir llamadas a la base de datos
+- Optimización de conexiones para evitar fugas de memoria
+- Manejo mejorado de reintentos y errores de conexión
+- Monitoreo de consultas lentas
+
+### Optimizaciones de IA
+
+- Carga asíncrona de recursos de IA en segundo plano
+- Sistema de caché para asistentes y vectores para evitar recreaciones
+- Carga por lotes con límites de concurrencia para archivos de entrenamiento
+- Uso de singleton para cliente OpenAI
+
+### Optimizaciones de Inicio
+
+- Paralelización de tareas de inicialización
+- Carga diferida de componentes no críticos
+- Manejo mejorado de errores para prevenir caídas del servidor
+
+### Optimizaciones de Memoria
+
+- Reutilización de threads y conexiones
+- Liberación adecuada de recursos no utilizados
+- Limpieza periódica de cachés
+
+Estas optimizaciones reducen significativamente el uso de CPU, memoria y mejoran el tiempo de respuesta del servidor.

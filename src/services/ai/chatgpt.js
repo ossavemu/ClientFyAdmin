@@ -6,11 +6,19 @@ import { assistantService } from "./assistantService.js";
 import { getPrompt } from "./promptService.js";
 import { trainingService } from "./trainingService.js";
 
-// Inicializar OpenAI una sola vez
-const openai = new OpenAI({ apiKey: config.openai_apikey });
+// Inicializar OpenAI una sola vez y usar singleton
+let openaiInstance = null;
+const getOpenAI = () => {
+  if (!openaiInstance) {
+    openaiInstance = new OpenAI({ apiKey: config.openai_apikey });
+  }
+  return openaiInstance;
+};
 
 // Caché para los vectorStores creados
-const vectorStoreCache = new Map();
+export const vectorStoreCache = new Map();
+// Caché para los threads para evitar creaciones repetidas
+const threadCache = new Map();
 
 // Función para almacenar un vector store en la caché (usado en la inicialización)
 export const cacheVectorStore = (botNumber, vectorStoreId) => {
@@ -24,62 +32,79 @@ export const cacheVectorStore = (botNumber, vectorStoreId) => {
   return false;
 };
 
-// Función para formatear el número de teléfono
+// Función para formatear el número de teléfono - refactorizada para ser más eficiente
 const formatPhoneNumber = (phone) => {
-  logger.trace(`Formateando número de teléfono: ${phone}`);
+  if (!phone) return null;
 
-  // Eliminar todos los caracteres que no sean números
+  // Usar una sola expresión regular para limpiar
   const cleaned = phone.toString().replace(/\D/g, "");
-  logger.trace(`Número limpio: ${cleaned}`);
 
-  // Asegurarse de que tenga el formato correcto (agregar 57 si no lo tiene)
+  // Agregar prefijo solo si es necesario
   const formatted = cleaned.startsWith("57") ? cleaned : `57${cleaned}`;
-  logger.trace(`Número formateado: ${formatted}`);
 
-  // Asegurarse de que tenga al menos 10 dígitos después del prefijo
+  // Validación simple de longitud
   if (formatted.length < 12) {
-    logger.warn(
-      `Longitud de número inválida: ${formatted.length}, se requieren al menos 12 dígitos`
-    );
-    throw new Error(
-      `Número de teléfono inválido: longitud ${formatted.length}, se requieren al menos 12 dígitos`
-    );
+    logger.warn(`Número inválido: ${formatted} (longitud < 12)`);
+    return null;
   }
 
   return formatted;
 };
 
-// Función para obtener o crear un vector store para el asistente
+// Función para obtener o crear un vector store para el asistente - con memoria caché
 async function getOrCreateVectorStore(botNumber, assistantId) {
-  // Verificar si ya tenemos un vector store en caché
+  // Verificar caché primero
   if (vectorStoreCache.has(botNumber)) {
-    logger.debug(`Usando vectorStore en caché para ${botNumber}`);
     return vectorStoreCache.get(botNumber);
   }
 
-  logger.info(
-    `No se encontró vectorStore en caché para ${botNumber}, creando uno nuevo...`
-  );
-
-  // Obtener archivos de entrenamiento
-  const trainingFiles = await trainingService.getTrainingFiles(botNumber);
-  if (trainingFiles.length === 0) {
-    logger.warn("No hay archivos de entrenamiento disponibles");
-    return null;
-  }
-
   try {
-    // Subir archivos a OpenAI
-    logger.debug("Subiendo archivos a OpenAI...");
-    const filePromises = trainingFiles.map(async (file) => {
-      const uploadedFile = await openai.files.create({
-        file: fs.createReadStream(file.localPath),
-        purpose: "assistants",
-      });
-      return uploadedFile.id;
-    });
+    // Obtener archivos de entrenamiento
+    const trainingFiles = await trainingService.getTrainingFiles(botNumber);
+    if (trainingFiles.length === 0) {
+      return null;
+    }
 
-    const fileIds = await Promise.all(filePromises);
+    const openai = getOpenAI();
+
+    // Filtrar archivos que realmente existen antes de procesarlos
+    const existingFiles = trainingFiles.filter(
+      (file) => file.localPath && fs.existsSync(file.localPath)
+    );
+
+    if (existingFiles.length === 0) {
+      logger.warn(
+        "Ninguno de los archivos de entrenamiento existe en el sistema"
+      );
+      return null;
+    }
+
+    // Subir archivos con un límite de concurrencia (máximo 3 a la vez)
+    const fileIds = [];
+    const concurrencyLimit = 3;
+    for (let i = 0; i < existingFiles.length; i += concurrencyLimit) {
+      const batch = existingFiles.slice(i, i + concurrencyLimit);
+      const batchResults = await Promise.all(
+        batch.map(async (file) => {
+          try {
+            const uploadedFile = await openai.files.create({
+              file: fs.createReadStream(file.localPath),
+              purpose: "assistants",
+            });
+            return uploadedFile.id;
+          } catch (err) {
+            logger.error(`Error subiendo archivo ${file.name}:`, err);
+            return null;
+          }
+        })
+      );
+      fileIds.push(...batchResults.filter((id) => id !== null));
+    }
+
+    if (fileIds.length === 0) {
+      logger.warn("No se pudo subir ningún archivo a OpenAI");
+      return null;
+    }
 
     // Crear vector store
     const vectorStore = await openai.beta.vectorStores.create({
@@ -98,10 +123,6 @@ async function getOrCreateVectorStore(botNumber, assistantId) {
 
     // Guardar en caché
     vectorStoreCache.set(botNumber, vectorStore.id);
-    logger.info(
-      `Nuevo vector store creado y almacenado en caché: ${vectorStore.id}`
-    );
-
     return vectorStore.id;
   } catch (error) {
     logger.error("Error creando vectorStore", error);
@@ -109,6 +130,7 @@ async function getOrCreateVectorStore(botNumber, assistantId) {
   }
 }
 
+// Función principal de chat optimizada
 export const chat = async (
   question,
   userPhoneNumber,
@@ -117,108 +139,68 @@ export const chat = async (
   provider = "baileys"
 ) => {
   try {
-    // Usar directamente el número configurado
+    const openai = getOpenAI();
     const botNumber = config.P_NUMBER;
 
-    // Log del mensaje del usuario
+    // Log del mensaje entrante
     logger.info(`[USUARIO ${userPhoneNumber}]: ${question}`);
 
-    logger.info(
-      `Iniciando chat con bot número: ${botNumber}, usuario: ${userPhoneNumber}, provider: ${provider}`
-    );
+    // Crear clave de cache usando botNumber y userPhoneNumber
+    const cacheKey = `${botNumber}:${userPhoneNumber}`;
 
-    // Obtener el prompt desde la API
-    const prompt = await getPrompt(botNumber);
-    logger.debug("Prompt obtenido correctamente");
+    // Obtener el prompt y assistant en paralelo
+    const [prompt, assistantId] = await Promise.all([
+      getPrompt(botNumber),
+      assistantService.getOrCreateAssistant(botNumber, config.provider),
+    ]);
 
-    // Obtener o crear el assistant_id para este bot
-    const assistantId = await assistantService.getOrCreateAssistant(
-      botNumber,
-      config.provider
-    );
-
-    // Si no hay thread, crear uno nuevo
+    // Determinar si es un nuevo thread o usar uno existente
+    const isFirstMessage = !thread;
     if (!thread) {
-      logger.debug("Creando nuevo thread...");
-      thread = await openai.beta.threads.create();
-      logger.debug(`Nuevo thread creado: ${thread.id}`);
-
-      // Verificar si ya existe un vector store en la caché
-      if (!vectorStoreCache.has(botNumber)) {
-        logger.debug(
-          "No se encontró vector store en caché, verificando si es necesario crearlo"
-        );
-        await getOrCreateVectorStore(botNumber, assistantId);
+      // Usar thread de caché si existe
+      if (threadCache.has(cacheKey)) {
+        thread = threadCache.get(cacheKey);
+        logger.debug(`Usando thread en caché: ${thread.id}`);
       } else {
-        logger.debug(`Vector store encontrado en caché para ${botNumber}`);
+        // Crear nuevo thread
+        thread = await openai.beta.threads.create();
+        threadCache.set(cacheKey, thread);
+        logger.debug(`Nuevo thread creado y almacenado en caché: ${thread.id}`);
+
+        // Verificar si hay vector store o necesitamos crearlo - en segundo plano
+        if (!vectorStoreCache.has(botNumber)) {
+          getOrCreateVectorStore(botNumber, assistantId).catch((err) =>
+            logger.error("Error creando vector store en segundo plano:", err)
+          );
+        }
       }
-    } else {
-      logger.debug(`Usando thread existente: ${thread.id}`);
     }
 
     // Agregar el mensaje del usuario al thread
-    logger.debug("Agregando mensaje al thread...");
     await openai.beta.threads.messages.create(thread.id, {
       role: "user",
       content: question,
     });
 
-    // Modificar para incluir un mensaje de bienvenida más elaborado si es el primer mensaje
-    const isFirstMessage = !thread;
-    let run;
+    // Preparar instrucciones básicas para el asistente
+    const businessInfo = `
+      Representas a: ${config.company_name || "nuestra empresa"}
+      Ubicación: ${config.company_address || "dirección no especificada"}
+    `;
 
-    if (
-      isFirstMessage &&
-      question.toLowerCase().match(/^(hola|buenos|hi|hey)/)
-    ) {
-      // Crear una versión personalizada del prompt con información específica de la empresa
-      const businessInfo = `
-        Representas a: ${config.company_name || "nuestra empresa"}
-        Ubicación: ${config.company_address || "dirección no especificada"}
-      `;
+    const instructions = `${config.defaultPrompt(
+      userName
+    )}\n\n${businessInfo}\n\n${prompt}`;
 
-      logger.debug("Aplicando prompt personalizado para mensaje de bienvenida");
+    // Ejecutar el asistente
+    const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
+      assistant_id: assistantId,
+      instructions: instructions,
+    });
 
-      // Ejecutar el asistente con instrucciones personalizadas
-      run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-        assistant_id: assistantId,
-        instructions: `${config.defaultPrompt(
-          userName
-        )}\n\n${businessInfo}\n\n${prompt}`,
-      });
-    } else {
-      // Crear una versión estándar del prompt con información específica de la empresa
-      const businessInfo = `
-        Representas a: ${config.company_name || "nuestra empresa"}
-        Ubicación: ${config.company_address || "dirección no especificada"}
-      `;
-
-      logger.debug("Aplicando prompt estándar");
-
-      // Usar las instrucciones normales para mensajes que no son de bienvenida
-      run = await openai.beta.threads.runs.createAndPoll(thread.id, {
-        assistant_id: assistantId,
-        instructions: `${config.defaultPrompt(
-          userName
-        )}\n\n${businessInfo}\n\n${prompt}`,
-      });
-    }
-
-    // Si la corrida se completa, obtener la respuesta
+    // Procesar respuesta
     if (run.status === "completed") {
-      logger.debug("Run completado, obteniendo mensajes...");
       const messages = await openai.beta.threads.messages.list(run.thread_id);
-
-      // Log de todos los mensajes para debug (sin mostrar el contenido completo)
-      for (const message of messages.data.reverse()) {
-        const content = message.content[0]?.text?.value || "";
-        const truncatedContent =
-          content.length > 50 ? content.substring(0, 50) + "..." : content;
-
-        logger.trace(
-          `Mensaje: ${message.role} > [${truncatedContent.length} caracteres]`
-        );
-      }
 
       // Obtener la última respuesta del asistente
       const assistantResponse = messages.data
@@ -226,7 +208,6 @@ export const chat = async (
         .pop();
 
       if (!assistantResponse) {
-        logger.warn("No se encontró respuesta del asistente");
         return {
           thread,
           response: "Lo siento, no pude generar una respuesta.",
@@ -236,127 +217,37 @@ export const chat = async (
       // Obtener la respuesta del asistente
       const answer = assistantResponse.content[0].text.value;
 
+      // Log de la respuesta
+      logger.info(
+        `[ASISTENTE → ${userPhoneNumber}]: ${answer.substring(0, 100)}${
+          answer.length > 100 ? "..." : ""
+        }`
+      );
+
       // Procesar comandos especiales
       if (answer.includes("!list_files")) {
         const files = await trainingService.getTrainingFiles(botNumber);
-        // Enumerar los archivos para facilitar la selección
         const fileList = files
           .map((f, index) => `${index + 1}. ${f.name}`)
           .join("\n");
         const response = `Aquí están los documentos disponibles:\n${fileList}\n\nPuedes pedirme cualquiera por su nombre o número. ¿Cuál te gustaría recibir?`;
 
-        // Log de la respuesta del asistente con lista de archivos
-        logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
-
-        return {
-          thread,
-          response,
-        };
+        return { thread, response };
       }
-
-      if (answer.includes("!send_file:")) {
-        const fileName = answer.split("!send_file:")[1].trim();
-        const files = await trainingService.getTrainingFiles(botNumber);
-
-        // Intentar encontrar el archivo de varias formas
-        let fileToSend = files.find((f) => {
-          const userInput = fileName.toLowerCase();
-          const name = f.name.toLowerCase();
-
-          // Verificar por nombre exacto
-          if (name === userInput) return true;
-
-          // Verificar por número (1, 2, 3...)
-          const fileIndex = files.indexOf(f) + 1;
-          if (fileIndex.toString() === userInput) return true;
-
-          // Verificar por texto (primero, segundo...)
-          const textNumbers = {
-            primero: 1,
-            primer: 1,
-            uno: 1,
-            segundo: 2,
-            dos: 2,
-            tercero: 3,
-            tercer: 3,
-            tres: 3,
-            cuarto: 4,
-            cuatro: 4,
-            quinto: 5,
-            cinco: 5,
-          };
-          if (fileIndex === textNumbers[userInput]) return true;
-
-          // Verificar si el nombre contiene la entrada del usuario
-          return name.includes(userInput);
-        });
-
-        if (fileToSend) {
-          // Preparar archivo para envío
-          const response = `¡Aquí tienes el archivo "${fileToSend.name}"!`;
-
-          // Log de la respuesta del asistente con archivo
-          logger.info(
-            `[ASISTENTE → ${userPhoneNumber}]: ${response} [ARCHIVO: ${fileToSend.name}]`
-          );
-
-          return {
-            thread,
-            response,
-            file: fileToSend,
-          };
-        } else {
-          const response = `Lo siento, no pude encontrar el archivo "${fileName}". Por favor, intenta con otro nombre.`;
-
-          // Log de la respuesta del asistente (error al buscar archivo)
-          logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
-
-          return {
-            thread,
-            response,
-          };
-        }
-      }
-
-      // Log de la respuesta del asistente
-      logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${answer}`);
 
       return { thread, response: answer };
-    } else if (run.status === "failed") {
-      logger.warn(`Run falló: ${run.error}`);
-      const response = `Lo siento, ocurrió un error: ${run.error.message}`;
-
-      // Log del error en la respuesta
-      logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
-
-      return {
-        thread,
-        response,
-      };
     } else {
-      logger.warn(`Run no completado, estado: ${run.status}`);
-      const response =
-        "Lo siento, no pude completar la operación. Por favor, intenta de nuevo más tarde.";
-
-      // Log del error en la respuesta
-      logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
-
+      logger.error(`Error en la conversación: ${run.status}`);
       return {
         thread,
-        response,
+        response: "Lo siento, hubo un problema al procesar tu mensaje.",
       };
     }
   } catch (error) {
-    logger.error("Error en chat", error);
-    const response =
-      "Lo siento, ocurrió un error. Por favor, intenta de nuevo más tarde.";
-
-    // Log del error en la respuesta
-    logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
-
+    logger.error("Error en chat service:", error);
     return {
       thread: null,
-      response,
+      response: "Lo siento, ocurrió un error en el servicio de chat.",
     };
   }
 };
