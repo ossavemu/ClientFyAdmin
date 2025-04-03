@@ -1,6 +1,7 @@
 import fs from "fs";
 import OpenAI from "openai";
 import { config } from "../../config/index.js";
+import { prompt as metaPrompt } from "../../prompt.js";
 import { logger } from "../setup/logger.js";
 import { assistantService } from "./assistantService.js";
 import { getPrompt } from "./promptService.js";
@@ -148,11 +149,21 @@ export const chat = async (
     // Crear clave de cache usando botNumber y userPhoneNumber
     const cacheKey = `${botNumber}:${userPhoneNumber}`;
 
-    // Obtener el prompt y assistant en paralelo
-    const [prompt, assistantId] = await Promise.all([
-      getPrompt(botNumber),
-      assistantService.getOrCreateAssistant(botNumber, config.provider),
-    ]);
+    // Obtener prompt según el provider
+    let customPrompt;
+    if (provider === "meta" || config.provider === "meta") {
+      logger.info("Usando prompt específico para Meta");
+      customPrompt = metaPrompt;
+    } else {
+      // Obtener el prompt normal para otros providers
+      customPrompt = await getPrompt(botNumber);
+    }
+
+    // Obtener asistente
+    const assistantId = await assistantService.getOrCreateAssistant(
+      botNumber,
+      config.provider
+    );
 
     // Determinar si es un nuevo thread o usar uno existente
     const isFirstMessage = !thread;
@@ -190,7 +201,7 @@ export const chat = async (
 
     const instructions = `${config.defaultPrompt(
       userName
-    )}\n\n${businessInfo}\n\n${prompt}`;
+    )}\n\n${businessInfo}\n\n${customPrompt}`;
 
     // Ejecutar el asistente
     const run = await openai.beta.threads.runs.createAndPoll(thread.id, {
