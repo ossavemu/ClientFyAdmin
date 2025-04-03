@@ -4,6 +4,7 @@ import { config } from "../../config/index.js";
 import { prompt as metaPrompt } from "../../prompt.js";
 import { logger } from "../setup/logger.js";
 import { assistantService } from "./assistantService.js";
+import { cacheService } from "./cacheService.js";
 import { getPrompt } from "./promptService.js";
 import { trainingService } from "./trainingService.js";
 
@@ -16,17 +17,19 @@ const getOpenAI = () => {
   return openaiInstance;
 };
 
-// Caché para los vectorStores creados
+// Caché para los vectorStores creados (se migrará gradualmente a cacheService)
 export const vectorStoreCache = new Map();
-// Caché para los threads para evitar creaciones repetidas
+// Caché para los threads para evitar creaciones repetidas (se migrará a cacheService)
 const threadCache = new Map();
 
 // Función para almacenar un vector store en la caché (usado en la inicialización)
 export const cacheVectorStore = (botNumber, vectorStoreId) => {
   if (botNumber && vectorStoreId) {
     vectorStoreCache.set(botNumber, vectorStoreId);
+    // También almacenar en el nuevo servicio centralizado
+    cacheService.vectorStores.set(botNumber, vectorStoreId);
     logger.info(
-      `Vector store ${vectorStoreId} almacenado en caché para bot ${botNumber}`
+      `✅ Vector store ${vectorStoreId} almacenado en caché para bot ${botNumber}`
     );
     return true;
   }
@@ -52,6 +55,38 @@ const formatPhoneNumber = (phone) => {
   return formatted;
 };
 
+// Función para obtener archivos de entrenamiento con preferencia al caché centralizado
+async function getTrainingFilesFromCache(botNumber) {
+  // Usar la misma clave de caché que en trainingService
+  const cacheKey = config.P_NUMBER;
+
+  logger.debug(
+    `[CHATGPT] Buscando archivos en caché para ${botNumber} (clave caché: ${cacheKey})`
+  );
+
+  // Verificar primero si están en el caché centralizado
+  if (cacheService.training.has(cacheKey)) {
+    const cachedFiles = cacheService.training.get(cacheKey);
+    logger.info(
+      `[CHATGPT] ⚡ USANDO CACHÉ CENTRALIZADO: ${cachedFiles.length} archivos (desde getTrainingFilesFromCache)`
+    );
+    return cachedFiles;
+  }
+
+  // Si no están en caché, obtenerlos de la API y guardarlos en caché
+  logger.info(
+    `[CHATGPT] 🔍 Archivos NO ENCONTRADOS en caché, solicitando desde API...`
+  );
+  const files = await trainingService.getTrainingFiles(botNumber);
+
+  // No necesitamos guardar en caché nuevamente ya que trainingService ya lo hace
+  logger.debug(
+    `[CHATGPT] Se obtuvieron ${files.length} archivos de trainingService`
+  );
+
+  return files;
+}
+
 // Función para obtener o crear un vector store para el asistente - con memoria caché
 async function getOrCreateVectorStore(botNumber, assistantId) {
   // Verificar caché primero
@@ -60,8 +95,8 @@ async function getOrCreateVectorStore(botNumber, assistantId) {
   }
 
   try {
-    // Obtener archivos de entrenamiento
-    const trainingFiles = await trainingService.getTrainingFiles(botNumber);
+    // Obtener archivos de entrenamiento usando el caché centralizado
+    const trainingFiles = await getTrainingFilesFromCache(botNumber);
     if (trainingFiles.length === 0) {
       return null;
     }
@@ -237,7 +272,7 @@ export const chat = async (
 
       // Procesar comandos especiales
       if (answer.includes("!list_files")) {
-        const files = await trainingService.getTrainingFiles(botNumber);
+        const files = await getTrainingFilesFromCache(botNumber);
         const fileList = files
           .map((f, index) => `${index + 1}. ${f.name}`)
           .join("\n");

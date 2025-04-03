@@ -3,6 +3,7 @@ import fs from "fs";
 import OpenAI from "openai";
 import { config } from "./config/index.js";
 import { assistantService } from "./services/ai/assistantService.js";
+import { cacheService } from "./services/ai/cacheService.js";
 import { cacheVectorStore, vectorStoreCache } from "./services/ai/chatgpt.js";
 import { trainingService } from "./services/ai/trainingService.js";
 import { databaseService } from "./services/data/databaseService.js";
@@ -17,26 +18,20 @@ import { webServer } from "./web/server.js";
 // Inicializar OpenAI una sola vez
 const openai = new OpenAI({ apiKey: config.openai_apikey });
 
-// Cache de recursos precarargados para evitar operaciones duplicadas
-const resourceCache = {
-  assistantIds: new Map(),
-  trainingFiles: new Map(),
-  images: new Map(),
-  vectorStores: new Map(),
-};
-
 // Función para precargar recursos de AI de manera optimizada
 const preloadAIResources = async (botNumber) => {
   try {
-    logger.info("Precargando recursos de IA...");
+    logger.info("🚀 [INIT] Precargando recursos de IA...");
 
     // Verificar si los recursos ya están en caché
-    if (resourceCache.assistantIds.has(botNumber)) {
-      logger.info(`Usando recursos en caché para el bot ${botNumber}`);
+    if (cacheService.assistants.has(botNumber)) {
+      logger.info(
+        `✅ [INIT] Usando recursos en caché para el bot ${botNumber}`
+      );
       return {
-        assistantId: resourceCache.assistantIds.get(botNumber),
-        trainingFiles: resourceCache.trainingFiles.get(botNumber) || [],
-        images: resourceCache.images.get(botNumber) || [],
+        assistantId: cacheService.assistants.get(botNumber),
+        trainingFiles: cacheService.training.get(botNumber) || [],
+        images: cacheService.images.get(botNumber) || [],
       };
     }
 
@@ -45,22 +40,32 @@ const preloadAIResources = async (botNumber) => {
       botNumber,
       config.provider
     );
-    resourceCache.assistantIds.set(botNumber, assistantId);
-    logger.info(`Asistente cargado con ID: ${assistantId}`);
+    cacheService.assistants.set(botNumber, assistantId);
+    logger.info(`✅ [INIT] Asistente cargado con ID: ${assistantId}`);
 
     // Precargar archivos de entrenamiento - hacer esto de manera asíncrona
+    logger.info(
+      `🔄 [INIT] Iniciando precarga de archivos para entrenamiento...`
+    );
     let trainingFilesPromise = trainingService
       .getTrainingFiles(botNumber)
       .then((files) => {
-        resourceCache.trainingFiles.set(botNumber, files);
-        logger.info(`Archivos de entrenamiento cargados: ${files.length}`);
+        // Usar config.P_NUMBER como clave de caché para garantizar consistencia
+        logger.debug(
+          `📦 [INIT] Almacenando ${files.length} archivos en caché centralizado con clave: ${config.P_NUMBER}`
+        );
+        cacheService.training.set(config.P_NUMBER, files);
+        logger.info(
+          `📚 [INIT] Archivos de entrenamiento precargados: ${files.length}`
+        );
         return files;
       });
 
     // Precargar imágenes - hacer esto de manera asíncrona
+    logger.info(`🔄 [INIT] Iniciando precarga de imágenes...`);
     let imagesPromise = imageService.getImages(botNumber).then((images) => {
-      resourceCache.images.set(botNumber, images);
-      logger.info(`Imágenes precargadas: ${images.length}`);
+      cacheService.images.set(botNumber, images);
+      logger.info(`🖼️ [INIT] Imágenes precargadas: ${images.length}`);
       return images;
     });
 
@@ -73,42 +78,72 @@ const preloadAIResources = async (botNumber) => {
     // Crear el vector store con los archivos de entrenamiento si no existe en cache
     if (trainingFiles.length > 0 && !vectorStoreCache.has(botNumber)) {
       // Crear el vector store en segundo plano
+      logger.info(
+        `🔄 [INIT] Iniciando creación de vector store en segundo plano...`
+      );
       createVectorStore(botNumber, trainingFiles, assistantId).catch((error) =>
-        logger.error("Error creando vector store en segundo plano:", error)
+        logger.error(
+          "❌ [INIT] Error creando vector store en segundo plano:",
+          error
+        )
       );
     } else {
       logger.info(
-        "Vector store ya existe o no hay archivos de entrenamiento disponibles"
+        `ℹ️ [INIT] ${
+          vectorStoreCache.has(botNumber)
+            ? "Vector store ya existe"
+            : "No hay archivos de entrenamiento disponibles"
+        }`
       );
     }
 
+    logger.info(`✅ [INIT] Precarga de recursos completada con éxito`);
     return { assistantId, trainingFiles, images };
   } catch (error) {
-    logger.error("Error precargando recursos de IA:", error);
+    logger.error("❌ [INIT] Error precargando recursos de IA:", error);
     return { assistantId: null, trainingFiles: [], images: [] };
   }
 };
 
 // Función para crear vector store en segundo plano
 const createVectorStore = async (botNumber, trainingFiles, assistantId) => {
-  logger.info("Creando vector store en segundo plano...");
+  logger.info("🧠 [VECTORSTORE] Iniciando creación de vector store...");
   try {
     // Subir archivos a OpenAI para el vector store - solo los que existen
-    const filePromises = trainingFiles
-      .filter((file) => file.localPath && fs.existsSync(file.localPath))
-      .map(async (file) => {
+    const validFiles = trainingFiles.filter(
+      (file) => file.localPath && fs.existsSync(file.localPath)
+    );
+    logger.debug(
+      `[VECTORSTORE] Procesando ${validFiles.length} archivos válidos de ${trainingFiles.length} disponibles`
+    );
+
+    const filePromises = validFiles.map(async (file) => {
+      try {
         const uploadedFile = await openai.files.create({
           file: fs.createReadStream(file.localPath),
           purpose: "assistants",
         });
+        logger.trace(
+          `[VECTORSTORE] Archivo "${file.name}" subido con ID: ${uploadedFile.id}`
+        );
         return uploadedFile.id;
-      });
+      } catch (err) {
+        logger.error(
+          `[VECTORSTORE] ❌ Error subiendo archivo "${file.name}"`,
+          err
+        );
+        return null;
+      }
+    });
 
     const fileIds = (await Promise.all(filePromises)).filter(
       (id) => id !== null
     );
 
     if (fileIds.length > 0) {
+      logger.info(
+        `[VECTORSTORE] Creando vector store con ${fileIds.length} archivos...`
+      );
       // Crear vector store
       const vectorStore = await openai.beta.vectorStores.create({
         name: `VectorStore-${botNumber}-${Date.now()}`,
@@ -116,6 +151,9 @@ const createVectorStore = async (botNumber, trainingFiles, assistantId) => {
       });
 
       // Actualizar el assistant con el vector store
+      logger.debug(
+        `[VECTORSTORE] Actualizando asistente ${assistantId} con vector store ${vectorStore.id}`
+      );
       await openai.beta.assistants.update(assistantId, {
         tool_resources: {
           file_search: {
@@ -126,12 +164,16 @@ const createVectorStore = async (botNumber, trainingFiles, assistantId) => {
 
       // Almacenar el vector store en la caché para uso futuro
       cacheVectorStore(botNumber, vectorStore.id);
-      logger.info(`Vector store creado con éxito: ${vectorStore.id}`);
+      logger.info(
+        `✅ [VECTORSTORE] Vector store creado con éxito: ${vectorStore.id}`
+      );
     } else {
-      logger.warn("No se pudieron procesar archivos para el vector store");
+      logger.warn(
+        "⚠ [VECTORSTORE] No se pudieron procesar archivos para el vector store"
+      );
     }
   } catch (error) {
-    logger.error("Error creando vector store:", error);
+    logger.error("❌ [VECTORSTORE] Error creando vector store:", error);
   }
 };
 
