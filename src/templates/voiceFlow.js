@@ -6,6 +6,7 @@ import { trainingService } from "../services/ai/trainingService.js";
 import { voice2text } from "../services/ai/voicegpt.js";
 import { wsUserService } from "../services/data/wsUserService.js";
 import { imageService } from "../services/setup/imageService.js";
+import { logger } from "../services/setup/logger.js";
 import { typing } from "../services/setup/typing.js";
 import { downloadFile, downloadFileBaileys } from "../utils/downloader.js";
 import { removeFile } from "../utils/remover.js";
@@ -22,7 +23,7 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
         config.provider === "meta" ? config.numberId : config.P_NUMBER;
 
       if (!botNumber) {
-        console.error("Error: botNumber no está definido");
+        logger.error("Error: botNumber no está definido");
         return ctxFn.endFlow(
           "Lo siento, hay un problema con la configuración del bot. Por favor, contacta al administrador."
         );
@@ -159,7 +160,11 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
             for (const image of images) {
               await typing(1, { ctx, ctxFn });
               if (!image.localPath) {
-                console.error("Ruta local no válida:", image);
+                logger.warn(
+                  `Ruta local no válida para imagen: ${
+                    image.name || "desconocida"
+                  }`
+                );
                 continue;
               }
 
@@ -171,13 +176,9 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
                   },
                 ]);
               } catch (imgError) {
-                console.error("Error enviando imagen:", imgError);
-              } finally {
-                // Limpiar archivo temporal
-                if (fs.existsSync(image.localPath)) {
-                  fs.unlinkSync(image.localPath);
-                }
+                logger.error("Error enviando imagen", imgError);
               }
+              // No eliminar las imágenes ya que están en caché
             }
             return ctxFn.endFlow();
           } else {
@@ -186,7 +187,7 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
             );
           }
         } catch (error) {
-          console.error("Error al obtener imágenes:", error);
+          logger.error("Error al obtener imágenes", error);
           return ctxFn.endFlow(
             "Lo siento, hubo un problema al obtener las imágenes. Por favor, intenta más tarde."
           );
@@ -208,7 +209,7 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
             for (const file of files) {
               await typing(1, { ctx, ctxFn });
               if (!file.localPath) {
-                console.error("Ruta local no válida:", file);
+                logger.error(`Ruta local no válida: ${JSON.stringify(file)}`);
                 continue;
               }
 
@@ -221,7 +222,7 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
                   },
                 ]);
               } catch (fileError) {
-                console.error("Error enviando archivo:", fileError);
+                logger.error("Error enviando archivo", fileError);
               } finally {
                 // Limpiar archivo temporal
                 if (fs.existsSync(file.localPath)) {
@@ -236,7 +237,7 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
             );
           }
         } catch (error) {
-          console.error("Error al obtener documentos:", error);
+          logger.error("Error al obtener documentos", error);
           return ctxFn.endFlow(
             "Lo siento, hubo un problema al obtener los documentos. Por favor, intenta más tarde."
           );
@@ -252,7 +253,7 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
       await ctxFn.state.update({ thread: response.thread });
       return ctxFn.endFlow(response.response);
     } catch (error) {
-      console.error("Error en voiceFlow:", error);
+      logger.error("Error en voiceFlow", error);
       return ctxFn.endFlow("Hubo un error procesando tu mensaje de voz");
     } finally {
       if (filePath) {

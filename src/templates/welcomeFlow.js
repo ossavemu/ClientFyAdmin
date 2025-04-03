@@ -5,6 +5,7 @@ import { chat } from "../services/ai/chatgpt.js";
 import { trainingService } from "../services/ai/trainingService.js";
 import { wsUserService } from "../services/data/wsUserService.js";
 import { imageService } from "../services/setup/imageService.js";
+import { logger } from "../services/setup/logger.js";
 import { typing } from "../services/setup/typing.js";
 import { notifyNewUser } from "../web/server.js";
 import {
@@ -52,7 +53,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
       );
 
       if (isHotUser) {
-        console.log("Usuario caliente detectado:", phoneNumber);
+        logger.info("Usuario caliente detectado:", phoneNumber);
       }
 
       const days = [
@@ -167,7 +168,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
             for (const file of files) {
               await typing(1, { ctx, ctxFn });
               if (!file.localPath) {
-                console.error("Ruta local no válida:", file);
+                logger.error("Ruta local no válida:", file);
                 continue;
               }
 
@@ -180,7 +181,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
                   },
                 ]);
               } catch (fileError) {
-                console.error("Error enviando archivo:", fileError);
+                logger.error("Error enviando archivo:", fileError);
               } finally {
                 // Limpiar archivo temporal
                 if (fs.existsSync(file.localPath)) {
@@ -195,7 +196,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
             );
           }
         } catch (error) {
-          console.error("Error al obtener documentos:", error);
+          logger.error("Error al obtener documentos:", error);
           return ctxFn.endFlow(
             "Lo siento, hubo un problema al obtener los documentos. Por favor, intenta más tarde."
           );
@@ -231,7 +232,11 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
             for (const image of images) {
               await typing(1, { ctx, ctxFn });
               if (!image.localPath) {
-                console.error("Ruta local no válida:", image);
+                logger.warn(
+                  `Ruta local no válida para imagen: ${
+                    image.name || "desconocida"
+                  }`
+                );
                 continue;
               }
 
@@ -243,13 +248,9 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
                   },
                 ]);
               } catch (imgError) {
-                console.error("Error enviando imagen:", imgError);
-              } finally {
-                // Limpiar archivo temporal
-                if (fs.existsSync(image.localPath)) {
-                  fs.unlinkSync(image.localPath);
-                }
+                logger.error("Error enviando imagen", imgError);
               }
+              // No eliminar las imágenes ya que están en caché
             }
             return ctxFn.endFlow();
           } else {
@@ -258,7 +259,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
             );
           }
         } catch (error) {
-          console.error("Error al obtener imágenes:", error);
+          logger.error("Error al obtener imágenes", error);
           return ctxFn.endFlow(
             "Lo siento, hubo un problema al obtener las imágenes. Por favor, intenta más tarde."
           );
@@ -272,7 +273,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
         config.provider === "meta" ? config.numberId : config.P_NUMBER;
 
       if (!botNumber) {
-        console.error("Error: botNumber no está definido");
+        logger.error("Error: botNumber no está definido");
         return ctxFn.endFlow(
           "Lo siento, hay un problema con la configuración del bot. Por favor, contacta al administrador."
         );
@@ -299,7 +300,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
             },
           ]);
         } catch (error) {
-          console.error("Error enviando archivo:", error);
+          logger.error("Error enviando archivo:", error);
           return ctxFn.endFlow(
             "Lo siento, hubo un error al enviar el archivo. Por favor, intenta nuevamente."
           );
@@ -366,7 +367,7 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
         await ctxFn.flowDynamic(response.response);
       }
     } catch (error) {
-      console.error("Error en welcomeFlow:", error);
+      logger.error("Error en welcomeFlow:", error);
       return ctxFn.endFlow(
         "Lo siento, hubo un error. Por favor, intenta nuevamente."
       );

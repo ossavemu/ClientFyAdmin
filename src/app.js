@@ -5,6 +5,7 @@ import { trainingService } from "./services/ai/trainingService.js";
 import { databaseService } from "./services/data/databaseService.js";
 import { reminder } from "./services/features/reminder.js";
 import { botService } from "./services/setup/botService.js";
+import { imageService } from "./services/setup/imageService.js";
 import { logger } from "./services/setup/logger.js";
 import { providerService } from "./services/setup/providerService.js";
 import templates from "./templates/index.js";
@@ -26,10 +27,14 @@ const preloadAIResources = async (botNumber) => {
     const trainingFiles = await trainingService.getTrainingFiles(botNumber);
     logger.info(`Archivos de entrenamiento cargados: ${trainingFiles.length}`);
 
-    return { assistantId, trainingFiles };
+    // Precargar imágenes
+    const images = await imageService.getImages(botNumber);
+    logger.info(`Imágenes precargadas: ${images.length}`);
+
+    return { assistantId, trainingFiles, images };
   } catch (error) {
     logger.error("Error precargando recursos de IA:", error);
-    return { assistantId: null, trainingFiles: [] };
+    return { assistantId: null, trainingFiles: [], images: [] };
   }
 };
 

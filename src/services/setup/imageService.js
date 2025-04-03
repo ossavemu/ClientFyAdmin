@@ -3,14 +3,48 @@ import fetch from "node-fetch";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import { config } from "../../config/index.js";
+import { logger } from "./logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Caché de imágenes
+const imagesCache = new Map();
+// TTL para la caché (en milisegundos) - 1 hora por defecto
+const CACHE_TTL = 60 * 60 * 1000;
+// Timestamp de la última actualización de la caché
+let lastImageCacheUpdate = 0;
+
 export const imageService = {
-  async getImages(phoneNumber) {
+  // Limpiar caché de imágenes
+  clearCache() {
+    imagesCache.clear();
+    lastImageCacheUpdate = 0;
+    logger.debug("Caché de imágenes limpiada");
+  },
+
+  // Forzar actualización de la caché
+  async refreshCache(phoneNumber) {
+    this.clearCache();
+    return this.getImages(phoneNumber, true);
+  },
+
+  async getImages(phoneNumber, forceRefresh = false) {
     try {
-      console.log("🔍 Obteniendo imágenes para P_NUMBER:", config.P_NUMBER);
+      logger.debug(`Obteniendo imágenes para número: ${config.P_NUMBER}`);
+
+      // Verificar si la caché aún es válida y si hay datos en caché
+      const now = Date.now();
+      if (
+        !forceRefresh &&
+        imagesCache.has(phoneNumber) &&
+        now - lastImageCacheUpdate < CACHE_TTL
+      ) {
+        logger.debug(`Usando imágenes en caché para: ${phoneNumber}`);
+        return imagesCache.get(phoneNumber);
+      }
+
+      logger.info("Obteniendo imágenes desde la API...");
       const response = await fetch(
         `${config.images_api_url}?phoneNumber=${config.P_NUMBER}`
       );
@@ -20,11 +54,17 @@ export const imageService = {
       }
 
       const data = await response.json();
-      console.log("📄 Respuesta del servidor:", JSON.stringify(data, null, 2));
+      logger.trace("Respuesta del servidor: " + JSON.stringify(data, null, 2));
 
       if (!data.success || !Array.isArray(data.images)) {
-        console.log("⚠️ No se encontraron imágenes");
+        logger.warn("No se encontraron imágenes");
         return [];
+      }
+
+      // Crear directorio temporal si no existe
+      const tempDir = path.join(__dirname, "../../temp");
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
       }
 
       // Descargar y guardar las imágenes localmente
@@ -37,7 +77,7 @@ export const imageService = {
               localPath: tempPath,
             };
           } catch (error) {
-            console.error(`Error procesando imagen ${image.name}:`, error);
+            logger.error(`Error procesando imagen ${image.name}`, error);
             return null;
           }
         })
@@ -46,17 +86,26 @@ export const imageService = {
       // Filtrar las imágenes que se descargaron correctamente
       const validImages = processedImages.filter((img) => img !== null);
 
-      console.log("✅ Imágenes procesadas:", validImages.length);
+      // Actualizar la caché
+      imagesCache.set(phoneNumber, validImages);
+      lastImageCacheUpdate = now;
+
+      logger.info(`Imágenes procesadas: ${validImages.length}`);
       return validImages;
     } catch (error) {
-      console.error("❌ Error en imageService:", error);
+      logger.error("Error en imageService", error);
+      // Si hay un error, devolver la caché si existe
+      if (imagesCache.has(phoneNumber)) {
+        logger.info("Devolviendo caché de imágenes debido a error en la API");
+        return imagesCache.get(phoneNumber);
+      }
       return [];
     }
   },
 
   async downloadImage(url, filename) {
     try {
-      console.log("📥 Descargando imagen:", filename);
+      logger.debug(`Descargando imagen: ${filename}`);
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -76,18 +125,18 @@ export const imageService = {
       const tempPath = path.join(tempDir, `${cleanName}.jpeg`);
 
       fs.writeFileSync(tempPath, Buffer.from(buffer));
-      console.log("✅ Imagen guardada en:", tempPath);
+      logger.trace(`Imagen guardada en: ${tempPath}`);
 
       return tempPath;
     } catch (error) {
-      console.error("❌ Error descargando imagen:", error);
+      logger.error("Error descargando imagen", error);
       throw error;
     }
   },
 
   async uploadImages(phoneNumber, files, names = []) {
     try {
-      console.log("📤 Iniciando subida de imágenes...");
+      logger.info("Iniciando subida de imágenes...");
       const formData = new FormData();
 
       formData.append("phoneNumber", config.P_NUMBER);
@@ -109,17 +158,20 @@ export const imageService = {
       }
 
       const data = await response.json();
-      console.log("📄 Respuesta de subida:", data);
+      logger.debug("Respuesta de subida: " + JSON.stringify(data));
 
       if (!data.success) {
-        console.log("❌ Error en la subida:", data.error);
+        logger.warn(`Error en la subida: ${data.error}`);
         return { success: false, error: data.error };
       }
 
-      console.log("✅ Imágenes subidas exitosamente");
+      // Después de una subida exitosa, invalidar la caché
+      this.clearCache();
+
+      logger.info("Imágenes subidas exitosamente");
       return { success: true, urls: data.urls };
     } catch (error) {
-      console.error("❌ Error subiendo imágenes:", error);
+      logger.error("Error subiendo imágenes", error);
       return { success: false, error: error.message };
     }
   },
