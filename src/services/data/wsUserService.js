@@ -1,6 +1,7 @@
 import { db } from "../../database/connection.js";
 import { agendaSchema } from "../../schemas/agenda.js";
 import { historicSchema, wsUserSchema } from "../../schemas/wsUser.js";
+import { logger } from "../setup/logger.js";
 
 export const wsUserService = {
   async registerBot() {
@@ -8,7 +9,7 @@ export const wsUserService = {
       const botNumber = process.env.P_NUMBER;
       const provider = process.env.PROVIDER || "baileys";
 
-      console.log("Registrando bot:", { botNumber, provider });
+      logger.debug(`Registrando bot: ${botNumber} (${provider})`);
 
       // Registrar el bot en ws_users
       await db.sql`
@@ -25,10 +26,11 @@ export const wsUserService = {
         RETURNING *
       `;
 
-      console.log("Bot registrado:", botResult[0]);
+      logger.debug("Bot registrado exitosamente");
+      logger.trace(`Detalles del bot: ${JSON.stringify(botResult[0])}`);
       return botResult[0];
     } catch (error) {
-      console.error("Error registrando bot:", error);
+      logger.error("Error registrando bot", error);
       throw error;
     }
   },
@@ -40,7 +42,8 @@ export const wsUserService = {
         name,
       });
 
-      console.log("Creando/actualizando usuario:", userData);
+      logger.debug(`Creando/actualizando usuario: ${phoneNumber}`);
+      logger.trace(`Datos de usuario: ${JSON.stringify(userData)}`);
 
       const result = await db.sql`
         INSERT INTO ws_users (phone_number, name)
@@ -52,10 +55,11 @@ export const wsUserService = {
         RETURNING *
       `;
 
-      console.log("Usuario creado/actualizado:", result[0]);
+      logger.debug(`Usuario ${result[0].phone_number} actualizado`);
+      logger.trace(`Detalles actualizados: ${JSON.stringify(result[0])}`);
       return result[0];
     } catch (error) {
-      console.error("Error in createOrUpdateUser:", error);
+      logger.error("Error en createOrUpdateUser", error);
       throw error;
     }
   },
@@ -68,18 +72,16 @@ export const wsUserService = {
     botNumber = process.env.P_NUMBER
   ) {
     try {
-      console.log("Iniciando logInteraction con:", {
-        phoneNumber,
-        botNumber,
-        provider,
-      });
+      logger.debug(
+        `Registrando interacción de ${phoneNumber} con bot ${botNumber} (${provider})`
+      );
 
       // Asegurarnos que el bot está registrado
       await this.registerBot();
 
       // Primero crear/actualizar el usuario para obtener el número correcto
       const user = await this.createOrUpdateUser(phoneNumber);
-      console.log("Usuario después de createOrUpdateUser:", user);
+      logger.trace(`Usuario actualizado: ${JSON.stringify(user)}`);
 
       // Usar el número de teléfono que se usó para crear/actualizar el usuario
       const formattedNumber = user.phone_number;
@@ -88,7 +90,7 @@ export const wsUserService = {
       const existingBot = await db.sql`
         SELECT * FROM bot_numbers WHERE phone_number = ${botNumber}
       `;
-      console.log("Bot existente:", existingBot[0]);
+      logger.trace(`Bot existente: ${JSON.stringify(existingBot[0])}`);
 
       // Verificar que ambos existen antes de continuar
       const finalUserCheck = await db.sql`
@@ -112,7 +114,8 @@ export const wsUserService = {
         provider,
       });
 
-      console.log("Intentando insertar en historic:", interactionData);
+      logger.debug("Insertando en histórico");
+      logger.trace(`Datos de interacción: ${JSON.stringify(interactionData)}`);
 
       await db.sql`
         INSERT INTO historic (
@@ -131,9 +134,9 @@ export const wsUserService = {
         )
       `;
 
-      console.log("Inserción en historic exitosa");
+      logger.debug("Interacción registrada exitosamente");
     } catch (error) {
-      console.error("Error detallado en logInteraction:", error);
+      logger.error("Error en logInteraction", error);
       throw error;
     }
   },
@@ -142,7 +145,7 @@ export const wsUserService = {
     try {
       return await db.sql`SELECT * FROM hot_users`;
     } catch (error) {
-      console.error("Error in getHotUsers:", error);
+      logger.error("Error en getHotUsers", error);
       throw error;
     }
   },
@@ -156,6 +159,9 @@ export const wsUserService = {
         name,
         zoom_link: zoomLink,
       });
+
+      logger.debug(`Creando agenda para usuario: ${phoneNumber}`);
+      logger.trace(`Datos de agenda: ${JSON.stringify(agendaData)}`);
 
       const result = await db.sql`
         INSERT INTO agenda (
@@ -175,9 +181,10 @@ export const wsUserService = {
         RETURNING *
       `;
 
+      logger.info(`Cita agendada exitosamente para: ${phoneNumber}`);
       return result[0];
     } catch (error) {
-      console.error("Error in createAgenda:", error);
+      logger.error("Error en createAgenda", error);
       throw error;
     }
   },
@@ -192,22 +199,21 @@ export const wsUserService = {
         ORDER BY scheduled_at ASC
       `;
     } catch (error) {
-      console.error("Error in getUpcomingAgenda:", error);
+      logger.error("Error en getUpcomingAgenda", error);
       throw error;
     }
   },
 
   async updateAgendaStatus(id, status) {
     try {
-      const result = await db.sql`
+      return await db.sql`
         UPDATE agenda 
-        SET status = ${status} 
+        SET status = ${status}, updated_at = CURRENT_TIMESTAMP
         WHERE id = ${id}
         RETURNING *
       `;
-      return result[0];
     } catch (error) {
-      console.error("Error in updateAgendaStatus:", error);
+      logger.error("Error en updateAgendaStatus", error);
       throw error;
     }
   },
@@ -216,46 +222,43 @@ export const wsUserService = {
     try {
       const appointments = await db.sql`
         SELECT * FROM agenda 
-        WHERE scheduled_at BETWEEN datetime('now') 
-          AND datetime('now', '+24 hours')
+        WHERE scheduled_at > CURRENT_TIMESTAMP
+        AND scheduled_at < CURRENT_TIMESTAMP + INTERVAL '24 hours'
         AND status = 'scheduled'
         ORDER BY scheduled_at ASC
       `;
       return appointments;
     } catch (error) {
-      console.error("Error in getUpcomingAppointments:", error);
+      logger.error("Error en getUpcomingAppointments", error);
       throw error;
     }
   },
 
   async updateAppointmentStatus(phoneNumber, scheduledAt, status) {
     try {
-      const result = await db.sql`
+      return await db.sql`
         UPDATE agenda 
-        SET status = ${status}
+        SET status = ${status}, updated_at = CURRENT_TIMESTAMP
         WHERE phone_number = ${phoneNumber}
         AND scheduled_at = ${scheduledAt}
-        AND status = 'scheduled'
         RETURNING *
       `;
-      return result[0];
     } catch (error) {
-      console.error("Error in updateAppointmentStatus:", error);
+      logger.error("Error en updateAppointmentStatus", error);
       throw error;
     }
   },
 
   async getRecentHistory(phoneNumber, limit = 10) {
     try {
-      const history = await db.sql`
+      return await db.sql`
         SELECT * FROM historic 
         WHERE phone_number = ${phoneNumber}
         ORDER BY created_at DESC
         LIMIT ${limit}
       `;
-      return history;
     } catch (error) {
-      console.error("Error in getRecentHistory:", error);
+      logger.error("Error en getRecentHistory", error);
       throw error;
     }
   },

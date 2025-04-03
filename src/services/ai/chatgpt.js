@@ -1,6 +1,7 @@
 import fs from "fs";
 import OpenAI from "openai";
 import { config } from "../../config/index.js";
+import { logger } from "../setup/logger.js";
 import { assistantService } from "./assistantService.js";
 import { getPrompt } from "./promptService.js";
 import { trainingService } from "./trainingService.js";
@@ -13,19 +14,21 @@ const vectorStoreCache = new Map();
 
 // Función para formatear el número de teléfono
 const formatPhoneNumber = (phone) => {
-  console.log("Número original:", phone);
+  logger.trace(`Formateando número de teléfono: ${phone}`);
 
   // Eliminar todos los caracteres que no sean números
   const cleaned = phone.toString().replace(/\D/g, "");
-  console.log("Número limpio:", cleaned);
+  logger.trace(`Número limpio: ${cleaned}`);
 
   // Asegurarse de que tenga el formato correcto (agregar 57 si no lo tiene)
   const formatted = cleaned.startsWith("57") ? cleaned : `57${cleaned}`;
-  console.log("Número formateado:", formatted);
+  logger.trace(`Número formateado: ${formatted}`);
 
   // Asegurarse de que tenga al menos 10 dígitos después del prefijo
   if (formatted.length < 12) {
-    console.log("Longitud inválida:", formatted.length);
+    logger.warn(
+      `Longitud de número inválida: ${formatted.length}, se requieren al menos 12 dígitos`
+    );
     throw new Error(
       `Número de teléfono inválido: longitud ${formatted.length}, se requieren al menos 12 dígitos`
     );
@@ -38,22 +41,22 @@ const formatPhoneNumber = (phone) => {
 async function getOrCreateVectorStore(botNumber, assistantId) {
   // Verificar si ya tenemos un vector store en caché
   if (vectorStoreCache.has(botNumber)) {
-    console.log(`Usando vectorStore en caché para ${botNumber}`);
+    logger.debug(`Usando vectorStore en caché para ${botNumber}`);
     return vectorStoreCache.get(botNumber);
   }
 
-  console.log(`Creando nuevo vectorStore para ${botNumber}`);
+  logger.info(`Creando nuevo vectorStore para ${botNumber}`);
 
   // Obtener archivos de entrenamiento
   const trainingFiles = await trainingService.getTrainingFiles(botNumber);
   if (trainingFiles.length === 0) {
-    console.log("No hay archivos de entrenamiento disponibles");
+    logger.warn("No hay archivos de entrenamiento disponibles");
     return null;
   }
 
   try {
     // Subir archivos a OpenAI
-    console.log("Subiendo archivos a OpenAI...");
+    logger.debug("Subiendo archivos a OpenAI...");
     const filePromises = trainingFiles.map(async (file) => {
       const uploadedFile = await openai.files.create({
         file: fs.createReadStream(file.localPath),
@@ -85,14 +88,14 @@ async function getOrCreateVectorStore(botNumber, assistantId) {
     // Limpiar archivos temporales
     trainingFiles.forEach((file) => {
       if (file.localPath && fs.existsSync(file.localPath)) {
-        console.log("Limpiando archivo temporal:", file.localPath);
+        logger.trace(`Limpiando archivo temporal: ${file.localPath}`);
         fs.unlinkSync(file.localPath);
       }
     });
 
     return vectorStore.id;
   } catch (error) {
-    console.error("Error creando vectorStore:", error);
+    logger.error("Error creando vectorStore", error);
     return null;
   }
 }
@@ -108,17 +111,13 @@ export const chat = async (
     // Determinar el número del bot según el provider
     const botNumber = provider === "meta" ? "000000000000" : config.P_NUMBER;
 
-    console.log(
-      "Iniciando chat con bot número:",
-      botNumber,
-      "usuario:",
-      userPhoneNumber,
-      "provider:",
-      provider
+    logger.info(
+      `Iniciando chat con bot número: ${botNumber}, usuario: ${userPhoneNumber}, provider: ${provider}`
     );
 
     // Obtener el prompt desde la API
     const prompt = await getPrompt(botNumber);
+    logger.debug("Prompt obtenido correctamente");
 
     // Obtener o crear el assistant_id para este bot
     const assistantId = await assistantService.getOrCreateAssistant(
@@ -128,18 +127,18 @@ export const chat = async (
 
     // Si no hay thread, crear uno nuevo
     if (!thread) {
-      console.log("Creando nuevo thread...");
+      logger.debug("Creando nuevo thread...");
       thread = await openai.beta.threads.create();
-      console.log("Nuevo thread creado:", thread.id);
+      logger.debug(`Nuevo thread creado: ${thread.id}`);
 
       // Si no existe un vectorStore para este bot, crear uno
       await getOrCreateVectorStore(botNumber, assistantId);
     } else {
-      console.log("Usando thread existente:", thread.id);
+      logger.debug(`Usando thread existente: ${thread.id}`);
     }
 
     // Agregar el mensaje del usuario al thread
-    console.log("Agregando mensaje al thread...");
+    logger.debug("Agregando mensaje al thread...");
     await openai.beta.threads.messages.create(thread.id, {
       role: "user",
       content: question,
@@ -159,26 +158,14 @@ export const chat = async (
         Ubicación: ${config.company_address || "dirección no especificada"}
       `;
 
-      const customInstructions = `
-        ${config.defaultPrompt(userName)}
-        
-        ${businessInfo}
-
-        Instrucciones adicionales:
-        1. Preséntate como un asesor comercial profesional y amigable
-        2. Menciona brevemente nuestros productos/servicios principales
-        3. Pregunta específicamente en qué puedes ayudar
-        4. Mantén un tono entusiasta pero profesional
-        5. Incluye una frase que genere interés en nuestros productos/servicios
-        6. Cuando sea relevante, menciona nuestra ubicación
-        
-        ${prompt}
-      `;
+      logger.debug("Aplicando prompt personalizado para mensaje de bienvenida");
 
       // Ejecutar el asistente con instrucciones personalizadas
       run = await openai.beta.threads.runs.createAndPoll(thread.id, {
         assistant_id: assistantId,
-        instructions: customInstructions,
+        instructions: `${config.defaultPrompt(
+          userName
+        )}\n\n${businessInfo}\n\n${prompt}`,
       });
     } else {
       // Crear una versión estándar del prompt con información específica de la empresa
@@ -186,6 +173,8 @@ export const chat = async (
         Representas a: ${config.company_name || "nuestra empresa"}
         Ubicación: ${config.company_address || "dirección no especificada"}
       `;
+
+      logger.debug("Aplicando prompt estándar");
 
       // Usar las instrucciones normales para mensajes que no son de bienvenida
       run = await openai.beta.threads.runs.createAndPoll(thread.id, {
@@ -198,13 +187,17 @@ export const chat = async (
 
     // Si la corrida se completa, obtener la respuesta
     if (run.status === "completed") {
-      console.log("Run completado, obteniendo mensajes...");
+      logger.debug("Run completado, obteniendo mensajes...");
       const messages = await openai.beta.threads.messages.list(run.thread_id);
 
-      // Log de todos los mensajes para debug
+      // Log de todos los mensajes para debug (sin mostrar el contenido completo)
       for (const message of messages.data.reverse()) {
-        console.log(
-          `Mensaje GS: ${message.role} > ${message.content[0].text.value}`
+        const content = message.content[0]?.text?.value || "";
+        const truncatedContent =
+          content.length > 50 ? content.substring(0, 50) + "..." : content;
+
+        logger.trace(
+          `Mensaje: ${message.role} > [${truncatedContent.length} caracteres]`
         );
       }
 
@@ -214,7 +207,7 @@ export const chat = async (
         .pop();
 
       if (!assistantResponse) {
-        console.log("No se encontró respuesta del asistente");
+        logger.warn("No se encontró respuesta del asistente");
         return {
           thread,
           response: "Lo siento, no pude generar una respuesta.",
@@ -291,13 +284,13 @@ export const chat = async (
 
       return { thread, response: answer };
     } else if (run.status === "failed") {
-      console.log("Run falló:", run.error);
+      logger.warn(`Run falló: ${run.error}`);
       return {
         thread,
         response: `Lo siento, ocurrió un error: ${run.error.message}`,
       };
     } else {
-      console.log("Run no completado, estado:", run.status);
+      logger.warn(`Run no completado, estado: ${run.status}`);
       return {
         thread,
         response:
@@ -305,7 +298,7 @@ export const chat = async (
       };
     }
   } catch (error) {
-    console.error("Error en chat:", error);
+    logger.error("Error en chat", error);
     return {
       thread: null,
       response:

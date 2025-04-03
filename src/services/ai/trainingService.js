@@ -3,6 +3,7 @@ import fetch from "node-fetch";
 import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import { config } from "../../config/index.js";
+import { logger } from "../setup/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,7 +59,7 @@ export const trainingService = {
   clearCache() {
     trainingFilesCache.clear();
     lastCacheUpdate = 0;
-    console.log("Caché de archivos de entrenamiento limpiada");
+    logger.debug("Caché de archivos de entrenamiento limpiada");
   },
 
   // Forzar actualización de la caché
@@ -69,7 +70,7 @@ export const trainingService = {
 
   async getTrainingFiles(phoneNumber, forceRefresh = false) {
     try {
-      console.log("🔍 Obteniendo archivos para P_NUMBER:", config.P_NUMBER);
+      logger.debug(`Obteniendo archivos para número: ${config.P_NUMBER}`);
 
       // Verificar si la caché aún es válida y si hay datos en caché
       const now = Date.now();
@@ -78,11 +79,11 @@ export const trainingService = {
         trainingFilesCache.has(phoneNumber) &&
         now - lastCacheUpdate < CACHE_TTL
       ) {
-        console.log("Usando archivos en caché para:", phoneNumber);
+        logger.debug(`Usando archivos en caché para: ${phoneNumber}`);
         return trainingFilesCache.get(phoneNumber);
       }
 
-      console.log("Obteniendo archivos frescos desde la API...");
+      logger.info("Obteniendo archivos desde la API...");
       const response = await fetch(
         `${config.training_files_url}?phoneNumber=${config.P_NUMBER}`
       );
@@ -117,7 +118,7 @@ export const trainingService = {
               mimeType: tempPath.mimeType,
             };
           } catch (error) {
-            console.error(`Error procesando archivo ${file.name}:`, error);
+            logger.error(`Error procesando archivo ${file.name}`, error);
             return null;
           }
         })
@@ -129,12 +130,13 @@ export const trainingService = {
       trainingFilesCache.set(phoneNumber, validFiles);
       lastCacheUpdate = now;
 
+      logger.debug(`Archivos procesados: ${validFiles.length}`);
       return validFiles;
     } catch (error) {
-      console.error("Error en trainingService:", error);
+      logger.error("Error en trainingService", error);
       // Si hay un error, devolver la caché si existe
       if (trainingFilesCache.has(phoneNumber)) {
-        console.log("Devolviendo caché debido a error en la API");
+        logger.info("Devolviendo caché debido a error en la API");
         return trainingFilesCache.get(phoneNumber);
       }
       return [];
@@ -143,7 +145,7 @@ export const trainingService = {
 
   async uploadTrainingFiles(phoneNumber, files, names = []) {
     try {
-      console.log("📤 Iniciando subida de archivos...");
+      logger.info("Iniciando subida de archivos...");
       const formData = new FormData();
 
       formData.append("phoneNumber", config.P_NUMBER);
@@ -165,20 +167,20 @@ export const trainingService = {
       }
 
       const data = await response.json();
-      console.log("📄 Respuesta de subida:", data);
+      logger.debug("Respuesta de subida: " + JSON.stringify(data));
 
       if (!data.success) {
-        console.log("❌ Error en la subida:", data.error);
+        logger.warn(`Error en la subida: ${data.error}`);
         return { success: false, error: data.error };
       }
 
       // Después de una subida exitosa, invalidar la caché
       this.clearCache();
 
-      console.log("✅ Archivos subidos exitosamente");
+      logger.info("Archivos subidos exitosamente");
       return { success: true, files: data.files };
     } catch (error) {
-      console.error("❌ Error subiendo archivos:", error);
+      logger.error("Error subiendo archivos", error);
       return { success: false, error: error.message };
     }
   },
@@ -209,12 +211,14 @@ export const trainingService = {
       const filePath = path.join(tempDir, cleanName);
       fs.writeFileSync(filePath, Buffer.from(buffer));
 
+      logger.trace(`Archivo descargado y guardado en: ${filePath}`);
+
       return {
         path: filePath,
         mimeType: this.getMimeType(cleanName),
       };
     } catch (error) {
-      console.error("Error procesando archivo:", error);
+      logger.error("Error procesando archivo", error);
       throw error;
     }
   },

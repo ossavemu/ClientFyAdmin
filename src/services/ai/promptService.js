@@ -1,58 +1,64 @@
 import { config } from "../../config/index.js";
 import { prompt as defaultPrompt } from "../../prompt.js";
+import { logger } from "../setup/logger.js";
 
 export const getPrompt = async (phoneNumber) => {
   try {
-    console.log("🔍 Iniciando obtención de prompt...");
-    console.log("📞 Número original:", phoneNumber);
+    logger.debug("Iniciando obtención de prompt...");
+    logger.trace(`Número original: ${phoneNumber}`);
 
     // Limpiar el número y mantener el prefijo del país
     const cleaned = phoneNumber.toString().replace(/\D/g, "");
-    console.log("📱 Número limpio:", cleaned);
+    logger.trace(`Número limpio: ${cleaned}`);
 
     // Construir URL con el número completo incluyendo prefijo
     const url = `${config.prompt_api_url}?phoneNumber=${cleaned}`;
-    console.log("🌐 URL:", url);
+    logger.trace(`URL: ${url}`);
 
     // Intentar obtener el prompt personalizado
     const response = await fetch(url);
-    console.log("📥 Status de respuesta:", response.status);
+    logger.debug(`Status de respuesta: ${response.status}`);
 
-    // Loguear la respuesta completa para debug
+    // Loguear la respuesta completa para debug (sin el contenido del prompt)
     const data = await response.json();
-    console.log("📄 Respuesta completa:", data);
+    const dataWithoutPrompt = { ...data };
+    if (dataWithoutPrompt.prompt) {
+      dataWithoutPrompt.prompt = "[CONTENIDO OMITIDO]";
+    }
+    logger.trace("Respuesta: " + JSON.stringify(dataWithoutPrompt));
 
     if (!response.ok) {
       if (response.status === 404) {
-        console.log(
+        logger.info(
           "No se encontró prompt personalizado, usando prompt por defecto"
         );
-        console.log("Prompt por defecto:", defaultPrompt);
         return defaultPrompt;
       }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     if (!data.success || !data.prompt) {
-      console.log(
+      logger.warn(
         "Respuesta no válida del servidor, usando prompt por defecto"
       );
-      console.log("Datos recibidos:", data);
+      logger.trace(
+        "Datos recibidos (sin prompt): " + JSON.stringify(dataWithoutPrompt)
+      );
       return defaultPrompt;
     }
 
-    console.log("✅ Prompt personalizado encontrado:", data.prompt);
+    logger.info("Prompt personalizado encontrado y aplicado");
     return data.prompt;
   } catch (error) {
-    console.log("❌ Error obteniendo prompt:", error);
-    console.log("Usando prompt de respaldo con instrucciones de ventas");
+    logger.error("Error obteniendo prompt", error);
+    logger.info("Usando prompt de respaldo con instrucciones de ventas");
     return defaultPrompt;
   }
 };
 
 export const savePrompt = async (phoneNumber, promptText) => {
   try {
-    console.log("💾 Iniciando guardado de prompt...");
+    logger.debug("Iniciando guardado de prompt...");
 
     // Limpiar el número
     const cleaned = phoneNumber.toString().replace(/\D/g, "");
@@ -73,9 +79,10 @@ export const savePrompt = async (phoneNumber, promptText) => {
     }
 
     const data = await response.json();
+    logger.info("Prompt guardado exitosamente");
     return data.success;
   } catch (error) {
-    console.log("Error guardando prompt:", error);
+    logger.error("Error guardando prompt", error);
     throw error;
   }
 };
