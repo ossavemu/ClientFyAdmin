@@ -117,8 +117,11 @@ export const chat = async (
   provider = "baileys"
 ) => {
   try {
-    // Determinar el número del bot según el provider
-    const botNumber = provider === "meta" ? "000000000000" : config.P_NUMBER;
+    // Usar directamente el número configurado
+    const botNumber = config.P_NUMBER;
+
+    // Log del mensaje del usuario
+    logger.info(`[USUARIO ${userPhoneNumber}]: ${question}`);
 
     logger.info(
       `Iniciando chat con bot número: ${botNumber}, usuario: ${userPhoneNumber}, provider: ${provider}`
@@ -240,9 +243,14 @@ export const chat = async (
         const fileList = files
           .map((f, index) => `${index + 1}. ${f.name}`)
           .join("\n");
+        const response = `Aquí están los documentos disponibles:\n${fileList}\n\nPuedes pedirme cualquiera por su nombre o número. ¿Cuál te gustaría recibir?`;
+
+        // Log de la respuesta del asistente con lista de archivos
+        logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
+
         return {
           thread,
-          response: `Aquí están los documentos disponibles:\n${fileList}\n\nPuedes pedirme cualquiera por su nombre o número. ¿Cuál te gustaría recibir?`,
+          response,
         };
       }
 
@@ -285,40 +293,70 @@ export const chat = async (
 
         if (fileToSend) {
           // Preparar archivo para envío
+          const response = `¡Aquí tienes el archivo "${fileToSend.name}"!`;
+
+          // Log de la respuesta del asistente con archivo
+          logger.info(
+            `[ASISTENTE → ${userPhoneNumber}]: ${response} [ARCHIVO: ${fileToSend.name}]`
+          );
+
           return {
             thread,
-            response: `¡Aquí tienes el archivo "${fileToSend.name}"!`,
+            response,
             file: fileToSend,
           };
         } else {
+          const response = `Lo siento, no pude encontrar el archivo "${fileName}". Por favor, intenta con otro nombre.`;
+
+          // Log de la respuesta del asistente (error al buscar archivo)
+          logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
+
           return {
             thread,
-            response: `Lo siento, no pude encontrar el archivo "${fileName}". Por favor, intenta con otro nombre.`,
+            response,
           };
         }
       }
 
+      // Log de la respuesta del asistente
+      logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${answer}`);
+
       return { thread, response: answer };
     } else if (run.status === "failed") {
       logger.warn(`Run falló: ${run.error}`);
+      const response = `Lo siento, ocurrió un error: ${run.error.message}`;
+
+      // Log del error en la respuesta
+      logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
+
       return {
         thread,
-        response: `Lo siento, ocurrió un error: ${run.error.message}`,
+        response,
       };
     } else {
       logger.warn(`Run no completado, estado: ${run.status}`);
+      const response =
+        "Lo siento, no pude completar la operación. Por favor, intenta de nuevo más tarde.";
+
+      // Log del error en la respuesta
+      logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
+
       return {
         thread,
-        response:
-          "Lo siento, no pude completar la operación. Por favor, intenta de nuevo más tarde.",
+        response,
       };
     }
   } catch (error) {
     logger.error("Error en chat", error);
+    const response =
+      "Lo siento, ocurrió un error. Por favor, intenta de nuevo más tarde.";
+
+    // Log del error en la respuesta
+    logger.info(`[ASISTENTE → ${userPhoneNumber}]: ${response}`);
+
     return {
       thread: null,
-      response:
-        "Lo siento, ocurrió un error. Por favor, intenta de nuevo más tarde.",
+      response,
     };
   }
 };
