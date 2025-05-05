@@ -4,19 +4,20 @@ import { logger } from "./logger.js";
 
 export const providerService = {
   getProvider() {
+    const providerName = config.provider?.toLowerCase();
     let provider;
     let botNumber;
 
-    if (config.provider === "meta") {
+    if (providerName === "meta") {
       provider = providerMeta;
       botNumber = config.numberId;
       logger.info(`Usando provider Meta (${botNumber})`);
-    } else if (config.provider === "baileys") {
+    } else if (providerName === "baileys") {
       provider = providerBaileys;
       botNumber = config.P_NUMBER;
       logger.info(`Usando provider Baileys (${botNumber})`);
     } else {
-      throw new Error("ERROR: Provider no válido en .env");
+      throw new Error(`ERROR: Provider no válido: ${config.provider}`);
     }
 
     return { provider, botNumber };

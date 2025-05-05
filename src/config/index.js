@@ -82,12 +82,13 @@ export const config = {
 
   // Validar que P_NUMBER esté presente
   validateConfig() {
-    if (!this.P_NUMBER) {
-      throw new Error("P_NUMBER es requerido en las variables de ambiente");
-    }
-    // Solo validar que sea un número válido
-    if (!this.P_NUMBER.match(/^\d+$/)) {
-      throw new Error(`P_NUMBER debe ser un número válido: ${this.P_NUMBER}`);
+    if (this.provider === "baileys") {
+      if (!this.P_NUMBER) {
+        throw new Error("P_NUMBER es requerido cuando provider es 'baileys'");
+      }
+      if (!this.P_NUMBER.match(/^\d+$/)) {
+        throw new Error(`P_NUMBER debe ser un número válido: ${this.P_NUMBER}`);
+      }
     }
   },
 };

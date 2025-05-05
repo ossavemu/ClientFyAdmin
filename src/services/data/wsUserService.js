@@ -1,27 +1,29 @@
+import { config } from "../../config/index.js";
 import { db } from "../../database/connection.js";
 import { agendaSchema } from "../../schemas/agenda.js";
 import { historicSchema, wsUserSchema } from "../../schemas/wsUser.js";
 import { logger } from "../setup/logger.js";
+import { providerService } from "../setup/providerService.js";
 
 export const wsUserService = {
   async registerBot() {
     try {
-      const botNumber = process.env.P_NUMBER;
-      const provider = process.env.PROVIDER || "baileys";
+      const { botNumber } = providerService.getProvider();
+      const providerName = config.provider?.toLowerCase() || "baileys";
 
-      logger.debug(`Registrando bot: ${botNumber} (${provider})`);
+      logger.debug(`Registrando bot: ${botNumber} (${providerName})`);
 
       // Registrar el bot en ws_users
       await db.sql`
         INSERT INTO ws_users (phone_number, name)
-        VALUES (${botNumber}, ${`Bot ${provider}`})
+        VALUES (${botNumber}, ${`Bot ${providerName}`})
         ON CONFLICT (phone_number) DO NOTHING
       `;
 
       // Registrar el bot en bot_numbers
       const botResult = await db.sql`
         INSERT INTO bot_numbers (phone_number, provider)
-        VALUES (${botNumber}, ${provider})
+        VALUES (${botNumber}, ${providerName})
         ON CONFLICT (phone_number) DO NOTHING
         RETURNING *
       `;
@@ -69,7 +71,7 @@ export const wsUserService = {
     messageType,
     content,
     provider = "user",
-    botNumber = process.env.P_NUMBER
+    botNumber = providerService.getProvider().botNumber
   ) {
     try {
       logger.debug(

@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Contexto del Proyecto
+
+- El proyecto utiliza bun como gestor de paquetes y runtime.
+- Los comandos principales definidos en [package.json](mdc:package.json) son:
+  - `dev`: `bun lint && bun --watch ./src/app.js`
+  - `migrate`: `bun run src/database/migrations/runMigrations.js up`
+  - `start`: `bun run src/app.js`
+- El punto de entrada principal es [src/app.js](mdc:src/app.js).
+- La configuración de variables de entorno está en [.env](mdc:.env) y se provee un ejemplo en [.env.example](mdc:.env.example).
+- Para contenerización se usa [Dockerfile](mdc:Dockerfile) y hay scripts de inicio y parada en [start.sh](mdc:start.sh) y [stop.sh](mdc:stop.sh).
+- La estructura de directorios en [src](mdc:src) incluye:
+  - `config`
+  - `database` con migraciones en [src/database/migrations](mdc:src/database/migrations)
+  - `provider`
+  - `schemas`
+  - `scripts`
+  - `services` (subdirectorios `ai`, `data`, `features`, `setup`)
+  - `web/public` para archivos estáticos
+- Hay scripts de configuración adicionales en [setup.sh](mdc:setup.sh).
+
+
+- no uses ls biblioteca de dotenv, recuerda que bun tiene una implementación nativa y automática
+

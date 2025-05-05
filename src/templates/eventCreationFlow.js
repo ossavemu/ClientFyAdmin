@@ -4,6 +4,7 @@ import { wsUserService } from "../services/data/wsUserService.js";
 import { createEvent } from "../services/features/calendar.js";
 import { emailInvite } from "../services/features/email.js";
 import { zoomInviteLink } from "../services/features/zoom.js";
+import { providerService } from "../services/setup/providerService.js";
 import { typing } from "../services/setup/typing.js";
 
 export const eventCreationFlow = addKeyword(EVENTS.ACTION).addAnswer(
@@ -12,7 +13,7 @@ export const eventCreationFlow = addKeyword(EVENTS.ACTION).addAnswer(
   async (ctx, ctxFn) => {
     try {
       const userInfo = await ctxFn.state.getMyState();
-      const botNumber = process.env.P_NUMBER;
+      const { botNumber } = providerService.getProvider();
       console.log("Estado actual:", userInfo);
 
       const name = userInfo.name;

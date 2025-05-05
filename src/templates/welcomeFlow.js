@@ -106,11 +106,10 @@ export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
         "agendar",
         "cita",
         "reservar",
-        "reunión",
-        "turno",
-        "hoy",
-        "mañana",
-        ...days,
+        //  "reunión",
+        //  "turno",
+        //  "hoy",
+        //  "mañana",
       ];
 
       const isScheduleRequest = keywordsSchedule.some(

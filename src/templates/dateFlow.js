@@ -1,5 +1,6 @@
 import { addKeyword, EVENTS } from "@builderbot/bot";
 import { readFileSync } from "fs";
+import { config } from "../config/index.js";
 import { simpleChat } from "../services/ai/simplegpt.js";
 import {
   getNextAvailableSlot,
@@ -234,7 +235,7 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
     null,
     async (ctx, ctxFn) => {
       try {
-        const botNumber = process.env.P_NUMBER;
+        const botNumber = config.P_NUMBER;
         const availableSlots = await getNext5AvailableSlots(botNumber);
         const formattedMessage = await formatAvailableSlots(availableSlots);
         await ctxFn.flowDynamic(formattedMessage);
@@ -251,7 +252,7 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
     "Revisando disponibilidad...",
     { capture: true },
     async (ctx, ctxFn) => {
-      const botNumber = process.env.P_NUMBER;
+      const botNumber = config.P_NUMBER;
       const currentDate = new Date();
       currentDate.setHours(currentDate.getHours() + 1);
       currentDate.setMinutes(0, 0, 0);
@@ -285,9 +286,10 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
 
       if (solicitedDate === "false" || !solicitedDate) {
         await typing(1, { ctx, ctxFn });
-        return ctxFn.endFlow(
-          "No pude entender la fecha solicitada, vuelve a intentarlo!"
+        await ctxFn.flowDynamic(
+          "No pude entender la fecha solicitada, intenta de nuevo"
         );
+        return ctxFn.gotoFlow(dateFlow);
       }
 
       const startDate = new Date(solicitedDate);
