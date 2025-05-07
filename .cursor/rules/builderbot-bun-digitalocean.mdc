@@ -1,0 +1,26 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Reglas del Proyecto: BuilderBot, Bun y DigitalOcean
+
+Esta aplicación utiliza las siguientes tecnologías principales:
+
+## BuilderBot
+- Framework para crear chatbots y apps inteligentes conectados a canales como WhatsApp, Telegram y más.
+- Documentación oficial: [https://www.builderbot.app/en](mdc:https:/www.builderbot.app/en)
+- Ejemplo de flujo básico y modularización: [Quickstart](mdc:https:/www.builderbot.app/quickstart), [Modularize](mdc:https:/www.builderbot.app/showcases/modularize)
+- Uso de funciones, contexto y eventos: [Functions](mdc:https:/www.builderbot.app/add-functions), [Context](mdc:https:/www.builderbot.app/context), [Events](mdc:https:/www.builderbot.app/events)
+
+## Bun
+- Runtime JavaScript/TypeScript rápido y todo-en-uno, compatible con Node.js, incluye bundler, test runner y gestor de paquetes.
+- Documentación oficial: [https://bun.sh/llm.txt](mdc:https:/bun.sh/llm.txt)
+- Instalación y conceptos: [What is Bun?](mdc:https:/bun.sh/docs/index.md), [Installation](mdc:https:/bun.sh/docs/installation.md)
+
+## DigitalOcean Droplets
+- Infraestructura de despliegue basada en máquinas virtuales Linux (VMs) en la nube.
+- Documentación oficial: [https://www.digitalocean.com/docs/droplets/](mdc:https:/www.digitalocean.com/docs/droplets)
+- Guía de inicio rápido y administración: [Getting Started](mdc:https:/docs.digitalocean.com/products/droplets/quickstart)
+
+Estas tecnologías definen la arquitectura, el despliegue y el flujo de desarrollo de la app. Usa los enlaces para profundizar en cada área según lo requiera el desarrollo o mantenimiento del proyecto.
