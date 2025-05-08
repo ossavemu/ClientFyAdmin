@@ -22,311 +22,263 @@ import { dateFlow } from "./dateFlow.js";
 const recentMessages = new Map();
 const DEDUPLICATION_WINDOW_MS = 2000; // Ignorar mensajes idénticos dentro de 2 segundos
 
+function deduplicateMessage(ctx) {
+  const currentTime = Date.now();
+  const lastMessageTime = recentMessages.get(ctx.from);
+  if (
+    lastMessageTime &&
+    currentTime - lastMessageTime < DEDUPLICATION_WINDOW_MS
+  ) {
+    logger.warn(
+      `[DEDUPLICATE] Mensaje duplicado ignorado de ${ctx.from} (dentro de ${DEDUPLICATION_WINDOW_MS}ms)`
+    );
+    return true;
+  }
+  recentMessages.set(ctx.from, currentTime);
+  if (Math.random() < 0.1) {
+    const cutoff = currentTime - DEDUPLICATION_WINDOW_MS * 10;
+    for (const [key, time] of recentMessages.entries()) {
+      if (time < cutoff) recentMessages.delete(key);
+    }
+  }
+  return false;
+}
+
+async function handleSchedule(ctx, ctxFn, bodyText, isFirstMessage) {
+  const keywordsSchedule = ["agendar", "cita"];
+  const words = bodyText.split(/\s+/);
+  const isScheduleRequest = keywordsSchedule.some((keyword) =>
+    words.includes(keyword)
+  );
+  if (!isScheduleRequest) return false;
+  const virtualEnabled = config.enableVirtualAppointments;
+  const inPersonEnabled = config.enableInPersonAppointments;
+  if (!virtualEnabled && !inPersonEnabled) {
+    await typing(1, { ctx, ctxFn });
+    return ctxFn.endFlow(
+      "Lo siento, el servicio de citas no está disponible en este momento."
+    );
+  }
+  if (virtualEnabled && !inPersonEnabled) {
+    await ctxFn.state.update({ appointmentType: "virtual" });
+    await typing(1, { ctx, ctxFn });
+    return ctxFn.gotoFlow(dateFlow);
+  }
+  if (!virtualEnabled && inPersonEnabled) {
+    await ctxFn.state.update({ appointmentType: "inPerson" });
+    await typing(1, { ctx, ctxFn });
+    return ctxFn.gotoFlow(dateFlow);
+  }
+  await typing(1, { ctx, ctxFn });
+  await ctxFn.flowDynamic(
+    "¿Qué tipo de cita prefieres?\n1. Virtual (por videollamada)\n2. Presencial"
+  );
+  await ctxFn.state.update({
+    waitingForAppointmentType: true,
+    lastMessage: bodyText,
+  });
+  return true;
+}
+
+async function handleAppointmentType(ctx, ctxFn, bodyText) {
+  const state = await ctxFn.state.getMyState();
+  if (!state?.waitingForAppointmentType) return false;
+  const response = bodyText.toLowerCase();
+  let appointmentType = null;
+  if (
+    response.includes("1") ||
+    response.includes("virtual") ||
+    response.includes("video")
+  )
+    appointmentType = "virtual";
+  else if (response.includes("2") || response.includes("presencial"))
+    appointmentType = "inPerson";
+  if (appointmentType) {
+    await ctxFn.state.update({
+      appointmentType,
+      waitingForAppointmentType: false,
+      body: state.lastMessage,
+    });
+    await typing(1, { ctx, ctxFn });
+    return ctxFn.gotoFlow(dateFlow);
+  } else {
+    await typing(1, { ctx, ctxFn });
+    await ctxFn.flowDynamic(
+      "Por favor, selecciona una opción válida:\n1. Virtual (por videollamada)\n2. Presencial"
+    );
+    return true;
+  }
+}
+
+async function handleDocumentRequest(ctx, ctxFn, bodyText) {
+  const isRequestingFiles = trainingService.containsTrainingKeywords(bodyText);
+  if (!isRequestingFiles) return false;
+  await typing(1, { ctx, ctxFn });
+  return ctxFn.gotoFlow(documentConfirmationFlow);
+}
+
+async function handleImageRequest(ctx, ctxFn, bodyText) {
+  const imageKeywords = [
+    "imagen",
+    "imágenes",
+    "fotos",
+    "foto",
+    "galería",
+    "ver imágenes",
+    "ver fotos",
+    "muéstrame",
+    "catalogo",
+    "catálogo",
+  ];
+  const isRequestingImages = imageKeywords.some((keyword) =>
+    bodyText.includes(keyword)
+  );
+  if (!isRequestingImages) return false;
+  await typing(1, { ctx, ctxFn });
+  return ctxFn.gotoFlow(imageConfirmationFlow);
+}
+
+async function handleNormalConversation(
+  ctx,
+  ctxFn,
+  bodyText,
+  phoneNumber,
+  isFirstMessage
+) {
+  await typing(1, { ctx, ctxFn });
+  const botNumber =
+    config.provider === "meta" ? config.numberId : config.P_NUMBER;
+  if (!botNumber) {
+    logger.error("Error: botNumber no está definido");
+    return ctxFn.endFlow(
+      "Lo siento, hay un problema con la configuración del bot. Por favor, contacta al administrador."
+    );
+  }
+  await notifyNewUser(phoneNumber, ctx.name);
+  let isFirstInteraction = isFirstMessage;
+  try {
+    const previousInteractions = await wsUserService.getInteractionHistory(
+      phoneNumber
+    );
+    if (previousInteractions && previousInteractions.length > 1)
+      isFirstInteraction = false;
+  } catch (error) {
+    logger.error(
+      `[WELCOME] Error verificando interacciones previas: ${error.message}`
+    );
+  }
+  const response = await chat(ctx.body, botNumber, ctx.name, null);
+  await ctxFn.state.update({ thread: response.thread });
+  if (isFirstInteraction) {
+    const hasDocuments =
+      (await trainingService.getTrainingFiles(botNumber)).length > 0;
+    const hasImages = (await imageService.getImages(botNumber)).length > 0;
+    let optionsMessage = "";
+    const virtualEnabled = config.enableVirtualAppointments;
+    const inPersonEnabled = config.enableInPersonAppointments;
+    const appointmentsEnabled = virtualEnabled || inPersonEnabled;
+    if (appointmentsEnabled || hasDocuments || hasImages) {
+      optionsMessage += "\n\nTambién puedes:";
+      if (appointmentsEnabled) {
+        let citasMessage = "\n•⁠  ⁠Agendar citas";
+        if (virtualEnabled && inPersonEnabled)
+          citasMessage += " (virtuales o presenciales)";
+        else if (virtualEnabled) citasMessage += " virtuales";
+        else if (inPersonEnabled) citasMessage += " presenciales";
+        citasMessage += " usando palabras como 'cita' o 'reservar'";
+        optionsMessage += citasMessage;
+      }
+      if (hasDocuments)
+        optionsMessage +=
+          "\n•⁠  ⁠Pedir documentos con términos como 'documento' o 'PDF'";
+      if (hasImages)
+        optionsMessage +=
+          "\n•⁠  ⁠Solicitar imágenes usando 'fotos' o 'catálogo'";
+    }
+    await ctxFn.flowDynamic(`${response.response}${optionsMessage}`);
+    await ctxFn.state.update({ hasInteracted: true, thread: response.thread });
+  } else {
+    await ctxFn.flowDynamic(response.response);
+  }
+  return true;
+}
+
 export const welcomeFlow = addKeyword(EVENTS.WELCOME).addAction(
   async (ctx, ctxFn) => {
     try {
-      const currentTime = Date.now();
-      const lastMessageTime = recentMessages.get(ctx.from);
-
-      // Lógica de Deduplicación
-      if (
-        lastMessageTime &&
-        currentTime - lastMessageTime < DEDUPLICATION_WINDOW_MS
-      ) {
-        logger.warn(
-          `[DEDUPLICATE] Mensaje duplicado ignorado de ${ctx.from} (dentro de ${DEDUPLICATION_WINDOW_MS}ms)`
-        );
-        return; // Ignorar este mensaje
-      }
-      recentMessages.set(ctx.from, currentTime);
-      // Limpiar entradas antiguas del caché ocasionalmente (opcional, para evitar crecimiento indefinido)
-      if (Math.random() < 0.1) {
-        // Limpiar aproximadamente 10% de las veces
-        const cutoff = currentTime - DEDUPLICATION_WINDOW_MS * 10; // Mantener los últimos 20 segundos
-        for (const [key, time] of recentMessages.entries()) {
-          if (time < cutoff) {
-            recentMessages.delete(key);
-          }
-        }
-      }
-
+      if (deduplicateMessage(ctx)) return;
       const bodyText = ctx.body.toLowerCase().trim();
       const phoneNumber = ctx.from;
       const isFirstMessage = ctxFn.state.get("firstMessage") === undefined;
       if (isFirstMessage) await ctxFn.state.update({ firstMessage: false });
-
       logger.info(
         `[WELCOME] Procesando mensaje de ${phoneNumber}: "${bodyText.substring(
           0,
           50
         )}..."`
       );
-
-      // Registrar el handler para enviar mensajes
       registerMessageHandler(async (targetPhone, message) => {
         if (targetPhone === phoneNumber) {
           await typing(1, { ctx, ctxFn });
           await ctxFn.flowDynamic(message);
         }
       });
-
-      // Verificar si el usuario está muteado usando el sistema en memoria
       if (isMuted(phoneNumber)) {
-        // Guardar el mensaje para contexto futuro
         const state = await ctxFn.state.getMyState();
         addMutedMessage(phoneNumber, bodyText, state?.thread ?? null);
-        // Si está muteado, permitir que el mensaje pase sin respuesta del bot
         return;
       }
-
-      // Registrar o actualizar usuario
       await wsUserService.createOrUpdateUser(phoneNumber, ctx.name);
-
-      // Registrar la interacción
       await wsUserService.logInteraction(phoneNumber, "text", bodyText);
-
-      // Verificar si es un usuario "caliente"
       const hotUsers = await wsUserService.getHotUsers();
       const isHotUser = hotUsers.some(
         (user) => user.phone_number === phoneNumber
       );
-
-      if (isHotUser) {
-        logger.info("Usuario caliente detectado:", phoneNumber);
-      }
-
-      const days = [
-        "lunes",
-        "martes",
-        "miércoles",
-        "jueves",
-        "viernes",
-        "sábado",
-        "domingo",
-      ];
-
-      const keywordsSchedule = [
-        "agendar",
-        "cita",
-        "reservar",
-        "reunión",
-        "turno",
-        "hoy",
-        "mañana",
-        ...days,
-      ];
-
-      const isScheduleRequest = keywordsSchedule.some(
-        (keyword) => bodyText.includes(keyword) || !isNaN(Number(keyword))
-      );
-
-      if (isScheduleRequest) {
-        // Verificar qué tipos de citas están habilitados
-        const virtualEnabled = config.enableVirtualAppointments;
-        const inPersonEnabled = config.enableInPersonAppointments;
-
-        if (!virtualEnabled && !inPersonEnabled) {
-          await typing(1, { ctx, ctxFn });
-          return ctxFn.endFlow(
-            "Lo siento, el servicio de citas no está disponible en este momento."
-          );
-        }
-
-        // Si solo un tipo está habilitado, usar ese directamente
-        if (virtualEnabled && !inPersonEnabled) {
-          await ctxFn.state.update({ appointmentType: "virtual" });
-          await typing(1, { ctx, ctxFn });
-          return ctxFn.gotoFlow(dateFlow);
-        }
-
-        if (!virtualEnabled && inPersonEnabled) {
-          await ctxFn.state.update({ appointmentType: "inPerson" });
-          await typing(1, { ctx, ctxFn });
-          return ctxFn.gotoFlow(dateFlow);
-        }
-
-        // Si ambos tipos están habilitados, preguntar al usuario
-        await typing(1, { ctx, ctxFn });
-        await ctxFn.flowDynamic(
-          "¿Qué tipo de cita prefieres?\n1. Virtual (por videollamada)\n2. Presencial"
+      if (isHotUser) logger.info("Usuario caliente detectado:", phoneNumber);
+      logger.debug(`[DEBUG] bodyText antes de handleSchedule: '${bodyText}'`);
+      if (await handleSchedule(ctx, ctxFn, bodyText, isFirstMessage)) {
+        logger.debug(
+          `[DEBUG] handleSchedule activado para bodyText: '${bodyText}'`
         );
-
-        // Esperar respuesta del usuario
-        await ctxFn.state.update({
-          waitingForAppointmentType: true,
-          lastMessage: bodyText,
-        });
         return;
       }
-
-      // Manejar la respuesta del tipo de cita si estamos esperando por ella
-      const state = await ctxFn.state.getMyState();
-      if (state?.waitingForAppointmentType) {
-        const response = bodyText.toLowerCase();
-        let appointmentType = null;
-
-        if (
-          response.includes("1") ||
-          response.includes("virtual") ||
-          response.includes("video")
-        ) {
-          appointmentType = "virtual";
-        } else if (response.includes("2") || response.includes("presencial")) {
-          appointmentType = "inPerson";
-        }
-
-        if (appointmentType) {
-          await ctxFn.state.update({
-            appointmentType,
-            waitingForAppointmentType: false,
-            body: state.lastMessage, // Restaurar el mensaje original
-          });
-          await typing(1, { ctx, ctxFn });
-          return ctxFn.gotoFlow(dateFlow);
-        } else {
-          await typing(1, { ctx, ctxFn });
-          await ctxFn.flowDynamic(
-            "Por favor, selecciona una opción válida:\n1. Virtual (por videollamada)\n2. Presencial"
-          );
-          return;
-        }
-      }
-
-      // Verificar si está solicitando documentos/archivos
-      const isRequestingFiles =
-        trainingService.containsTrainingKeywords(bodyText);
-
-      if (isRequestingFiles) {
-        await typing(1, { ctx, ctxFn });
-        // Redirigir al flujo de confirmación para documentos
-        return ctxFn.gotoFlow(documentConfirmationFlow);
-      }
-
-      // Palabras clave relacionadas con imágenes
-      const imageKeywords = [
-        "imagen",
-        "imágenes",
-        "fotos",
-        "foto",
-        "galería",
-        "ver imágenes",
-        "ver fotos",
-        "muéstrame",
-        "catalogo",
-        "catálogo",
-      ];
-
-      const isRequestingImages = imageKeywords.some((keyword) =>
-        bodyText.includes(keyword)
+      logger.debug(
+        `[DEBUG] bodyText antes de handleAppointmentType: '${bodyText}'`
       );
-
-      if (isRequestingImages) {
-        await typing(1, { ctx, ctxFn });
-        // Redirigir al flujo de confirmación para imágenes
-        return ctxFn.gotoFlow(imageConfirmationFlow);
-      }
-
-      await typing(1, { ctx, ctxFn });
-
-      // Determinar qué número de bot usar basado en el provider
-      const botNumber =
-        config.provider === "meta" ? config.numberId : config.P_NUMBER;
-
-      if (!botNumber) {
-        logger.error("Error: botNumber no está definido");
-        return ctxFn.endFlow(
-          "Lo siento, hay un problema con la configuración del bot. Por favor, contacta al administrador."
+      if (await handleAppointmentType(ctx, ctxFn, bodyText)) {
+        logger.debug(
+          `[DEBUG] handleAppointmentType activado para bodyText: '${bodyText}'`
         );
+        return;
       }
-
-      // Notificar al panel web sobre el nuevo usuario
-      await notifyNewUser(phoneNumber, ctx.name);
-
-      // Modificar la sección de estado
-      const currentState = (await ctxFn.state.getMyState()) || {};
-
-      // Crear clave de cache para verificar si ya existe un thread en la caché global
-      const cacheKey = `${botNumber}:${phoneNumber}`;
-
-      // Detectar si es primera interacción o no
-      let isFirstInteraction = isFirstMessage;
-
-      // Comprobar si hay interacciones previas en la base de datos
-      try {
-        // Obtener el historial de interacciones del usuario
-        const previousInteractions = await wsUserService.getInteractionHistory(
-          phoneNumber
-        );
-        // Si hay más de una interacción, no es la primera
-        if (previousInteractions && previousInteractions.length > 1) {
-          isFirstInteraction = false;
-          logger.debug(
-            `[WELCOME] No es primera interacción para ${phoneNumber}, tiene ${previousInteractions.length} interacciones previas`
-          );
-        }
-      } catch (error) {
-        logger.error(
-          `[WELCOME] Error verificando interacciones previas: ${error.message}`
-        );
-      }
-
-      // Obtener respuesta del servicio de chat
-      const response = await chat(
-        ctx.body,
-        botNumber,
-        ctx.name,
-        null // Forzar la creación de un nuevo thread cada vez
+      logger.debug(
+        `[DEBUG] bodyText antes de handleDocumentRequest: '${bodyText}'`
       );
-      await ctxFn.state.update({ thread: response.thread });
-
-      if (isFirstInteraction) {
-        // Es primera interacción, incluir opciones adicionales
-        // Obtener opciones disponibles
-        const hasDocuments =
-          (await trainingService.getTrainingFiles(botNumber)).length > 0;
-        const hasImages = (await imageService.getImages(botNumber)).length > 0;
-
-        // Construir mensaje de opciones
-        let optionsMessage = "";
-        const virtualEnabled = config.enableVirtualAppointments;
-        const inPersonEnabled = config.enableInPersonAppointments;
-        const appointmentsEnabled = virtualEnabled || inPersonEnabled;
-
-        if (appointmentsEnabled || hasDocuments || hasImages) {
-          optionsMessage += "\n\nTambién puedes:";
-          if (appointmentsEnabled) {
-            let citasMessage = "\n•⁠  ⁠Agendar citas";
-
-            if (virtualEnabled && inPersonEnabled) {
-              citasMessage += " (virtuales o presenciales)";
-            } else if (virtualEnabled) {
-              citasMessage += " virtuales";
-            } else if (inPersonEnabled) {
-              citasMessage += " presenciales";
-            }
-
-            citasMessage += " usando palabras como 'cita' o 'reservar'";
-            optionsMessage += citasMessage;
-          }
-          if (hasDocuments)
-            optionsMessage +=
-              "\n•⁠  ⁠Pedir documentos con términos como 'documento' o 'PDF'";
-          if (hasImages)
-            optionsMessage +=
-              "\n•⁠  ⁠Solicitar imágenes usando 'fotos' o 'catálogo'";
-        }
-
-        // Enviar respuesta combinada
-        await ctxFn.flowDynamic(`${response.response}${optionsMessage}`);
-
-        // Actualizar estado
-        await ctxFn.state.update({
-          hasInteracted: true,
-          thread: response.thread,
-        });
-      } else {
-        await ctxFn.flowDynamic(response.response);
+      if (await handleDocumentRequest(ctx, ctxFn, bodyText)) {
+        logger.debug(
+          `[DEBUG] handleDocumentRequest activado para bodyText: '${bodyText}'`
+        );
+        return;
       }
+      logger.debug(
+        `[DEBUG] bodyText antes de handleImageRequest: '${bodyText}'`
+      );
+      if (await handleImageRequest(ctx, ctxFn, bodyText)) {
+        logger.debug(
+          `[DEBUG] handleImageRequest activado para bodyText: '${bodyText}'`
+        );
+        return;
+      }
+      logger.debug(
+        `[DEBUG] bodyText antes de handleNormalConversation: '${bodyText}'`
+      );
+      await handleNormalConversation(
+        ctx,
+        ctxFn,
+        bodyText,
+        phoneNumber,
+        isFirstMessage
+      );
     } catch (error) {
       logger.error("Error en welcomeFlow:", error);
       return ctxFn.endFlow(

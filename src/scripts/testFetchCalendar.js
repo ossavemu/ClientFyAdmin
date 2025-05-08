@@ -6,6 +6,7 @@ async function testFetch() {
         "x-api-key": process.env.API_SECRET,
       },
     });
+
     const data = await response.json();
     console.log(data);
   } catch (error) {
