@@ -14,14 +14,7 @@ export async function getCalendarCredentials() {
     }
 
     const data = await response.json();
-
-    // Verificar que la respuesta tenga el formato esperado
-    if (!data.success || !data.data) {
-      throw new Error("Formato de respuesta inválido");
-    }
-
-    // Retornar solo los datos de las credenciales
-    return data.data;
+    return data.data ?? data;
   } catch (error) {
     console.error("Error al obtener credenciales:", error);
     throw new Error("No se pudieron obtener las credenciales");

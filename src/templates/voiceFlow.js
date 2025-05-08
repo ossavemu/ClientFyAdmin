@@ -1,15 +1,17 @@
 import { addKeyword, EVENTS } from "@builderbot/bot";
-import fs from "fs";
 import { config } from "../config/index.js";
 import { chat } from "../services/ai/chatgpt.js";
 import { trainingService } from "../services/ai/trainingService.js";
 import { voice2text } from "../services/ai/voicegpt.js";
 import { wsUserService } from "../services/data/wsUserService.js";
-import { imageService } from "../services/setup/imageService.js";
 import { logger } from "../services/setup/logger.js";
 import { typing } from "../services/setup/typing.js";
 import { downloadFile, downloadFileBaileys } from "../utils/downloader.js";
 import { removeFile } from "../utils/remover.js";
+import {
+  documentConfirmationFlow,
+  imageConfirmationFlow,
+} from "./confirmationFlows.js";
 import { dateFlow } from "./dateFlow.js";
 
 const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
@@ -151,47 +153,8 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
 
       if (isRequestingImages) {
         await typing(1, { ctx, ctxFn });
-        try {
-          const images = await imageService.getImages(phoneNumber);
-
-          if (images && images.length > 0) {
-            await ctxFn.flowDynamic("Aquí tienes las imágenes solicitadas:");
-
-            for (const image of images) {
-              await typing(1, { ctx, ctxFn });
-              if (!image.localPath) {
-                logger.warn(
-                  `Ruta local no válida para imagen: ${
-                    image.name || "desconocida"
-                  }`
-                );
-                continue;
-              }
-
-              try {
-                await ctxFn.flowDynamic([
-                  {
-                    body: image.name || "Imagen",
-                    media: image.localPath,
-                  },
-                ]);
-              } catch (imgError) {
-                logger.error("Error enviando imagen", imgError);
-              }
-              // No eliminar las imágenes ya que están en caché
-            }
-            return ctxFn.endFlow();
-          } else {
-            return ctxFn.endFlow(
-              "Lo siento, no encontré imágenes disponibles."
-            );
-          }
-        } catch (error) {
-          logger.error("Error al obtener imágenes", error);
-          return ctxFn.endFlow(
-            "Lo siento, hubo un problema al obtener las imágenes. Por favor, intenta más tarde."
-          );
-        }
+        // Redirigir al flujo de confirmación para imágenes
+        return ctxFn.gotoFlow(imageConfirmationFlow);
       }
 
       // Verificar si está solicitando documentos/archivos
@@ -200,48 +163,8 @@ const voiceFlow = addKeyword(EVENTS.VOICE_NOTE).addAction(
 
       if (isRequestingFiles) {
         await typing(1, { ctx, ctxFn });
-        try {
-          const files = await trainingService.getTrainingFiles(phoneNumber);
-
-          if (files && files.length > 0) {
-            await ctxFn.flowDynamic("Aquí tienes los documentos solicitados:");
-
-            for (const file of files) {
-              await typing(1, { ctx, ctxFn });
-              if (!file.localPath) {
-                logger.error(`Ruta local no válida: ${JSON.stringify(file)}`);
-                continue;
-              }
-
-              try {
-                await ctxFn.flowDynamic([
-                  {
-                    body: file.name || "Documento",
-                    media: file.localPath,
-                    mimeType: file.mimeType,
-                  },
-                ]);
-              } catch (fileError) {
-                logger.error("Error enviando archivo", fileError);
-              } finally {
-                // Limpiar archivo temporal
-                if (fs.existsSync(file.localPath)) {
-                  fs.unlinkSync(file.localPath);
-                }
-              }
-            }
-            return ctxFn.endFlow();
-          } else {
-            return ctxFn.endFlow(
-              "Lo siento, no encontré documentos disponibles."
-            );
-          }
-        } catch (error) {
-          logger.error("Error al obtener documentos", error);
-          return ctxFn.endFlow(
-            "Lo siento, hubo un problema al obtener los documentos. Por favor, intenta más tarde."
-          );
-        }
+        // Redirigir al flujo de confirmación para documentos
+        return ctxFn.gotoFlow(documentConfirmationFlow);
       }
 
       const thread = state?.thread ?? null;
