@@ -118,18 +118,7 @@ async function handleDocumentRequest(ctx, ctxFn, bodyText) {
 }
 
 async function handleImageRequest(ctx, ctxFn, bodyText) {
-  const imageKeywords = [
-    "imagen",
-    "imágenes",
-    "fotos",
-    "foto",
-    "galería",
-    "ver imágenes",
-    "ver fotos",
-    "muéstrame",
-    "catalogo",
-    "catálogo",
-  ];
+  const imageKeywords = ["imagen", "imágenes", "fotos", "foto"];
   const isRequestingImages = imageKeywords.some((keyword) =>
     bodyText.includes(keyword)
   );
@@ -185,15 +174,15 @@ async function handleNormalConversation(
           citasMessage += " (virtuales o presenciales)";
         else if (virtualEnabled) citasMessage += " virtuales";
         else if (inPersonEnabled) citasMessage += " presenciales";
-        citasMessage += " usando palabras como 'cita' o 'reservar'";
+        citasMessage += " usando palabras como 'cita', 'agendar', 'reservar'";
         optionsMessage += citasMessage;
       }
       if (hasDocuments)
         optionsMessage +=
-          "\n•⁠  ⁠Pedir documentos con términos como 'documento' o 'PDF'";
+          "\n•⁠  ⁠Pedir presentaciones y otros archivos con términos como 'catálogo' o 'presentación'";
       if (hasImages)
         optionsMessage +=
-          "\n•⁠  ⁠Solicitar imágenes usando 'fotos' o 'catálogo'";
+          "\n•⁠  ⁠Solicitar imágenes usando 'fotos' o 'imágenes'";
     }
     await ctxFn.flowDynamic(`${response.response}${optionsMessage}`);
     await ctxFn.state.update({ hasInteracted: true, thread: response.thread });

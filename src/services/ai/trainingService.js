@@ -33,11 +33,6 @@ let lastCacheUpdate = 0;
 export const TRAINING_KEYWORDS = [
   "documentos",
   "archivos",
-  "material",
-  "manual",
-  "manuales",
-  "instructivo",
-  "instructivos",
   "guía",
   "guias",
   "menu",
