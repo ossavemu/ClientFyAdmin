@@ -283,4 +283,36 @@ export const wsUserService = {
       throw error;
     }
   },
+
+  async countEngagementMessagesSinceLastUser(phoneNumber) {
+    try {
+      const lastUserMsg = await db.sql`
+        SELECT created_at FROM historic
+        WHERE phone_number = ${phoneNumber} AND provider != 'bot'
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      let since = lastUserMsg[0]?.created_at;
+      let query;
+      if (since) {
+        query = await db.sql`
+          SELECT COUNT(*) FROM historic
+          WHERE phone_number = ${phoneNumber}
+          AND provider = 'bot'
+          AND message_type = 'text'
+          AND created_at > ${since}
+        `;
+      } else {
+        query = await db.sql`
+          SELECT COUNT(*) FROM historic
+          WHERE phone_number = ${phoneNumber}
+          AND provider = 'bot'
+          AND message_type = 'text'
+        `;
+      }
+      return Number(query[0].count);
+    } catch (error) {
+      logger.error("Error en countEngagementMessagesSinceLastUser", error);
+      throw error;
+    }
+  },
 };

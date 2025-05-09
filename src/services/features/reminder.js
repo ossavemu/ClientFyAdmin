@@ -31,6 +31,16 @@ export const reminder = async (adapterProvider) => {
 
       for (const user of hotUsers) {
         try {
+          const count =
+            await wsUserService.countEngagementMessagesSinceLastUser(
+              user.phone_number
+            );
+          if (count >= 4) {
+            console.log(
+              `ℹ️ Usuario ${user.phone_number} ya recibió 4 mensajes de enganche desde su último mensaje, saltando.`
+            );
+            continue;
+          }
           // Obtener historial reciente de conversaciones del usuario
           const recentHistory = await wsUserService.getRecentHistory(
             user.phone_number
