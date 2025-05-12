@@ -1,0 +1,92 @@
+# Plan Detallado de Refactorización: ClientFyAdmin
+
+**Objetivos:**
+1.  Refactorizar hacia un enfoque más funcional: Un archivo `.js` por cada función lógica principal.
+2.  Adoptar una "Screaming Architecture": Organizar directorios y archivos por dominio/característica del negocio, no por tipo técnico.
+3.  Mejorar la mantenibilidad, testeabilidad y claridad del código.
+
+**Fases y Pasos:**
+
+**Fase 1: Preparación y Análisis Profundo (Estimar: 1-2 días)**
+
+1.  **Backup y Versionado:**
+    *   [ ] Asegurar que el estado actual del proyecto está commiteado en Git.
+    *   [ ] Crear una nueva rama para la refactorización (ej: `git checkout -b refactor-architecture`).
+2.  **Análisis Detallado de Módulos Clave:**
+    *   [ ] **`src/app.js`**: Mapear el flujo de inicialización. Identificar cómo se conectan el bot, el servidor web y los servicios.
+    *   [ ] **`src/services` (y subdirectorios `ai`, `data`, `features`, `setup`)**: Documentar las responsabilidades de cada servicio y característica implementada. Identificar dependencias entre ellos.
+    *   [ ] **`src/web` (`server.js`, `socket.js`)**: Entender las rutas API, middlewares y la lógica de comunicación en tiempo real con WebSockets.
+    *   [ ] **`src/utils`**: Crear un inventario de todas las funciones de utilidad, su propósito y dónde se utilizan.
+    *   [ ] **`src/database/connection.js`**: Analizar cómo se gestiona la conexión y si contiene lógica de consulta específica además de la configuración.
+    *   [ ] **`package.json`**: Revisar dependencias y scripts para entender completamente el stack tecnológico y los flujos de trabajo.
+
+**Fase 2: Refactorización Funcional (Archivo por Función) (Estimar: 3-5 días)**
+
+*   **Prioridad 1: `src/utils`**
+    *   [ ] Para cada archivo en `src/utils` que contenga múltiples funciones, dividirlo en archivos individuales.
+    *   [ ] Ejemplo: `downloader.js` -> `utils/download-media.js`, `utils/validate-url.js`, etc.
+    *   [ ] Mantener los nombres descriptivos y orientados a la acción.
+*   **Prioridad 2: `src/database/connection.js`**
+    *   [ ] Extraer funciones helper (si existen) a archivos separados.
+    *   [ ] Considerar crear funciones específicas para operaciones CRUD comunes o consultas complejas en archivos dedicados (ej: `database/queries/find-user-by-id.js`).
+*   **Prioridad 3: `src/services` (Interno)**
+    *   [ ] Aplicar el mismo principio de división a los archivos dentro de `ai`, `data`, `features`, `setup`.
+    *   [ ] Centrarse en separar responsabilidades lógicas distintas.
+*   **Prioridad 4: `src/web` (`server.js`, `socket.js`)**
+    *   [ ] Extraer manejadores de rutas de Express a archivos separados (ej: `web/routes/auth.js`, `web/routes/dashboard.js`).
+    *   [ ] Extraer manejadores de eventos de Socket.IO a archivos separados (ej: `web/socket-handlers/connection.js`, `web/socket-handlers/chat.js`).
+    *   [ ] Extraer middlewares a archivos/módulos dedicados.
+*   **Prioridad 5: `src/app.js`**
+    *   [ ] Descomponer la lógica de inicialización en funciones más pequeñas si el archivo es muy complejo. (ej: `setupBot()`, `startWebServer()`).
+
+**Fase 3: Reorganización hacia Screaming Architecture (Estimar: 3-5 días)**
+
+1.  **Definir Dominios/Características Clave:**
+    *   [ ] Basado en el análisis (Fase 1), definir una lista final de dominios de negocio. Ejemplos posibles: `bot-interactions`, `message-processing`, `appointment-scheduling`, `user-management`, `web-dashboard`, `data-access`, `shared-kernel`.
+2.  **Crear Nueva Estructura de Directorios:**
+    *   [ ] Crear la nueva estructura de carpetas dentro de `src/` basada en los dominios definidos.
+    *   [ ] Ejemplo: `src/bot-interactions/`, `src/message-processing/`, `src/shared-kernel/utils/`, `src/data-access/repositories/`, etc.
+3.  **Mover Archivos Refactorizados (Fase 2):**
+    *   [ ] Mover cada archivo `.js` (que ahora idealmente contiene una función principal) al directorio del dominio/característica correspondiente.
+    *   [ ] Mover utilidades genéricas a `shared-kernel/utils/`.
+    *   [ ] Mover funciones de acceso a datos a `data-access/repositories/` o similar.
+    *   [ ] Mover lógica web a `web-dashboard/`.
+    *   [ ] Mover configuración a `shared-kernel/config/`.
+    *   [ ] Mover schemas a `shared-kernel/schemas/` o dentro de su característica respectiva.
+4.  **Actualizar Imports:**
+    *   [ ] Revisar **todos** los archivos movidos y actualizar las rutas de importación (`import ... from '...'`) para que apunten a las nuevas ubicaciones. Utilizar rutas relativas o alias de path si están configurados. Este es un paso crítico.
+5.  **Revisar `package.json` y Entry Points:**
+    *   [ ] Asegurarse de que los scripts en `package.json` (`dev`, `start`, `migrate`, etc.) apunten a los archivos correctos después de la reorganización (especialmente el punto de entrada principal, antes `src/app.js`).
+    *   [ ] Verificar el `Dockerfile` y los scripts `.sh` (`start.sh`, `stop.sh`) por si referencian rutas antiguas.
+
+**Fase 4: Pruebas y Verificación (Estimar: 2-3 días)**
+
+1.  **Linting y Formateo:**
+    *   [ ] Ejecutar `bun lint` (o el comando de linting configurado) y corregir errores/warnings.
+2.  **Pruebas Unitarias:**
+    *   [ ] Ejecutar pruebas unitarias existentes.
+    *   [ ] Escribir nuevas pruebas unitarias para funciones críticas o complejas, aprovechando la mayor granularidad.
+3.  **Pruebas de Integración:**
+    *   [ ] Probar los flujos end-to-end principales:
+        *   Envío y recepción de mensajes del bot.
+        *   Procesamiento de diferentes tipos de entrada (texto, voz).
+        *   Funcionalidades clave (programación de citas, etc.).
+        *   Interacción con la interfaz web (login, visualización de datos, acciones).
+4.  **Pruebas Manuales:**
+    *   [ ] Realizar pruebas exploratorias manuales cubriendo todos los aspectos de la aplicación.
+
+**Fase 5: Limpieza y Documentación (Estimar: 1 día)**
+
+1.  **Eliminar Código Muerto:**
+    *   [ ] Eliminar archivos y directorios antiguos de la estructura previa.
+    *   [ ] Buscar y eliminar código comentado o no utilizado.
+2.  **Actualizar Documentación:**
+    *   [ ] Actualizar `README.md` para reflejar la nueva estructura del proyecto y cualquier cambio en los comandos de ejecución o configuración.
+    *   [ ] Considerar añadir diagramas de arquitectura simplificados si ayuda.
+
+**Consideraciones Adicionales:**
+
+*   **Iteración:** Realizar la refactorización en pasos pequeños y commitear frecuentemente.
+*   **Herramientas:** Usar las capacidades de refactoring del IDE para mover archivos y actualizar imports, pero siempre revisar manualmente.
+*   **Testing:** La existencia de pruebas automatizadas facilita enormemente este proceso. Si no existen, considerar añadir al menos pruebas de integración básicas antes de empezar.
+*   **Equipo:** Si trabajas en equipo, comunicar claramente el plan y la nueva estructura. 
