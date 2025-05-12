@@ -1,9 +1,9 @@
-import base64 from 'base-64';
-import fetch from 'node-fetch';
+import base64 from 'base-64'
+import fetch from 'node-fetch'
 
-const zoomAccountId = '_ye5ziRERfeqb_Nh3QITJQ';
-const zoomClientId = 'Gr6G140vS6SE28vqd0JX2A';
-const zoomClientSecret = 'jO2L7bDm53ruteWggZ9fUz93ku3TqqPI';
+const zoomAccountId = '_ye5ziRERfeqb_Nh3QITJQ'
+const zoomClientId = 'Gr6G140vS6SE28vqd0JX2A'
+const zoomClientSecret = 'jO2L7bDm53ruteWggZ9fUz93ku3TqqPI'
 
 const getAuthHeaders = () => {
   return {
@@ -11,8 +11,8 @@ const getAuthHeaders = () => {
       `${zoomClientId}:${zoomClientSecret}`
     )}`,
     'Content-Type': 'application/json',
-  };
-};
+  }
+}
 
 const generateZoomAccessToken = async () => {
   try {
@@ -22,22 +22,22 @@ const generateZoomAccessToken = async () => {
         method: 'POST',
         headers: getAuthHeaders(),
       }
-    );
+    )
 
-    const jsonResponse = await response.json();
+    const jsonResponse = await response.json()
 
-    return jsonResponse?.access_token;
+    return jsonResponse?.access_token
   } catch (error) {
-    console.log('generateZoomAccessToken Error --> ', error);
-    throw error;
+    console.log('generateZoomAccessToken Error --> ', error)
+    throw error
   }
-};
+}
 
 export const zoomInviteLink = async (date, clientEmail) => {
   try {
-    const zoomAccessToken = await generateZoomAccessToken();
+    const zoomAccessToken = await generateZoomAccessToken()
 
-    const response = await fetch(`https://api.zoom.us/v2/users/me/meetings`, {
+    const response = await fetch('https://api.zoom.us/v2/users/me/meetings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -51,8 +51,8 @@ export const zoomInviteLink = async (date, clientEmail) => {
 
         settings: {
           allow_multiple_devices: true,
-          //alternative_hosts: 'clientfy0@gmail.com',
-          //alternative_hosts_email_notification: true,
+          // alternative_hosts: 'clientfy0@gmail.com',
+          // alternative_hosts_email_notification: true,
           breakout_room: {
             enable: true,
             rooms: [
@@ -91,15 +91,15 @@ export const zoomInviteLink = async (date, clientEmail) => {
         topic: 'ClientFy Meeting',
         type: 2, // 1 -> Instant Meeting, 2 -> Scheduled Meeting
       }),
-    });
+    })
 
-    const jsonResponse = await response.json();
+    const jsonResponse = await response.json()
 
-    console.log('jsonResponse: ', jsonResponse);
+    console.log('jsonResponse: ', jsonResponse)
 
-    return jsonResponse.join_url;
+    return jsonResponse.join_url
   } catch (error) {
-    console.log('generateZoomMeeting Error --> ', error);
-    throw error;
+    console.log('generateZoomMeeting Error --> ', error)
+    throw error
   }
-};
+}

@@ -1,45 +1,46 @@
-import { google } from "googleapis";
-import { config } from "../../config/index.js";
-import { db } from "../../database/connection.js";
-import { getCalendarCredentials } from "../../utils/getCalendarCredentials.js";
+import { google } from 'googleapis'
+import { DateTime } from 'luxon'
+import { config } from '../../config/index.js'
+import { db } from '../../database/connection.js'
+import { getCalendarCredentials } from '../../utils/getCalendarCredentials.js'
 
 // Cache para almacenar IDs de calendario por número de bot
-const calendarIdCache = new Map();
+// const calendarIdCache = new Map()
 
 // Función para inicializar la autenticación
 async function initializeAuth() {
   try {
-    const credentials = await getCalendarCredentials();
+    const credentials = await getCalendarCredentials()
 
     // Verificar que todos los campos necesarios estén presentes
     const requiredFields = [
-      "client_email",
-      "private_key",
-      "project_id",
-      "client_id",
-    ];
+      'client_email',
+      'private_key',
+      'project_id',
+      'client_id',
+    ]
 
     for (const field of requiredFields) {
       if (!credentials[field]) {
         throw new Error(
           `Las credenciales no contienen el campo requerido: ${field}`
-        );
+        )
       }
     }
 
     // Asegurarse de que la clave privada esté en el formato correcto
-    if (credentials.private_key.includes("\\n")) {
-      credentials.private_key = credentials.private_key.replace(/\\n/g, "\n");
+    if (credentials.private_key.includes('\\n')) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n')
     }
 
     return new google.auth.GoogleAuth({
       credentials,
-      scopes: ["https://www.googleapis.com/auth/calendar"],
+      scopes: ['https://www.googleapis.com/auth/calendar'],
       subject: credentials.client_email, // Usar el client_email de las credenciales
-    });
+    })
   } catch (error) {
-    console.error("Error al inicializar la autenticación:", error);
-    throw new Error(`Error de autenticación: ${error.message}`);
+    console.error('Error al inicializar la autenticación:', error)
+    throw new Error(`Error de autenticación: ${error.message}`)
   }
 }
 
@@ -50,11 +51,11 @@ async function getCalendarIdFromDB(botNumber) {
       SELECT calendar_id 
       FROM calendar_ids 
       WHERE bot_number = ${botNumber}
-    `;
-    return results[0]?.calendar_id;
+    `
+    return results[0]?.calendar_id
   } catch (error) {
-    console.error("Error getting calendar ID from DB:", error);
-    throw error;
+    console.error('Error getting calendar ID from DB:', error)
+    throw error
   }
 }
 
@@ -68,10 +69,10 @@ async function saveCalendarIdToDB(botNumber, calendarId) {
       DO UPDATE SET 
         calendar_id = ${calendarId},
         updated_at = CURRENT_TIMESTAMP
-    `;
+    `
   } catch (error) {
-    console.error("Error saving calendar ID to DB:", error);
-    throw error;
+    console.error('Error saving calendar ID to DB:', error)
+    throw error
   }
 }
 
@@ -79,27 +80,27 @@ async function saveCalendarIdToDB(botNumber, calendarId) {
 async function getOrCreateCalendar(botNumber) {
   try {
     // Primero intentar obtener de la base de datos
-    const existingCalendarId = await getCalendarIdFromDB(botNumber);
+    const existingCalendarId = await getCalendarIdFromDB(botNumber)
     if (existingCalendarId) {
-      return existingCalendarId;
+      return existingCalendarId
     }
 
-    const auth = await initializeAuth();
-    const authClient = await auth.getClient();
-    google.options({ auth: authClient });
+    const auth = await initializeAuth()
+    const authClient = await auth.getClient()
+    google.options({ auth: authClient })
 
-    const calendar = google.calendar({ version: "v3" });
+    const calendar = google.calendar({ version: 'v3' })
 
     // Buscar calendario existente en Google Calendar
-    const calendarList = await calendar.calendarList.list();
+    const calendarList = await calendar.calendarList.list()
     const existingCalendar = calendarList.data.items.find(
       (cal) => cal.summary === `ClientFy Bot ${botNumber}`
-    );
+    )
 
     if (existingCalendar) {
       // Guardar en DB y retornar
-      await saveCalendarIdToDB(botNumber, existingCalendar.id);
-      return existingCalendar.id;
+      await saveCalendarIdToDB(botNumber, existingCalendar.id)
+      return existingCalendar.id
     }
 
     // Crear nuevo calendario si no existe
@@ -109,28 +110,28 @@ async function getOrCreateCalendar(botNumber) {
         description: `Calendario para el bot ${botNumber}`,
         timeZone: config.calendar.timeZone,
       },
-    });
+    })
 
     // Guardar el nuevo calendario en DB
-    await saveCalendarIdToDB(botNumber, newCalendar.data.id);
-    return newCalendar.data.id;
+    await saveCalendarIdToDB(botNumber, newCalendar.data.id)
+    return newCalendar.data.id
   } catch (error) {
-    console.error("Error en getOrCreateCalendar:", error);
-    throw error;
+    console.error('Error en getOrCreateCalendar:', error)
+    throw error
   }
 }
 
-const timeZone = "America/Cancun";
+const timeZone = 'America/Cancun'
 
 const rangeLimit = {
   days: [1, 2, 3, 4, 5],
   startHour: 9,
   endHour: 18,
-};
+}
 
-const standardDuration = 1;
+const standardDuration = 1
 
-const dateLimit = 30;
+const dateLimit = 30
 
 export async function createEvent(
   eventName,
@@ -140,203 +141,240 @@ export async function createEvent(
   duration = config.calendar.standardDuration
 ) {
   try {
-    const calendarId = await getOrCreateCalendar(botNumber);
-    const auth = await initializeAuth();
-    const authClient = await auth.getClient();
+    const calendarId = await getOrCreateCalendar(botNumber)
+    const auth = await initializeAuth()
+    const authClient = await auth.getClient()
 
-    google.options({ auth: authClient });
+    google.options({ auth: authClient })
 
-    console.log("Input date:", date);
-    console.log("Input duration:", duration);
+    console.log('Input date:', date)
+    console.log('Input duration:', duration)
 
-    const startDate = new Date(date);
-    console.log("Start date object:", startDate);
-    console.log("Start date hours:", startDate.getHours());
-    console.log("Start date ISO:", startDate.toISOString());
+    const startDate = new Date(date)
+    console.log('Start date object:', startDate)
+    console.log('Start date hours:', startDate.getHours())
+    console.log('Start date ISO:', startDate.toISOString())
 
-    const endDate = new Date(startDate);
-    endDate.setHours(startDate.getHours() + duration);
-    console.log("End date object:", endDate);
-    console.log("End date hours:", endDate.getHours());
-    console.log("End date ISO:", endDate.toISOString());
+    const endDate = new Date(startDate)
+    endDate.setHours(startDate.getHours() + duration)
+    console.log('End date object:', endDate)
+    console.log('End date hours:', endDate.getHours())
+    console.log('End date ISO:', endDate.toISOString())
 
     const event = {
       summary: eventName,
-      description: description,
+      description,
       start: {
         dateTime: startDate.toISOString(),
-        timeZone: timeZone,
+        timeZone,
       },
       end: {
         dateTime: endDate.toISOString(),
-        timeZone: timeZone,
+        timeZone,
       },
-      colorId: "2",
+      colorId: '2',
       conferenceData: {
         createRequest: {
           requestId: Math.random().toString(36).substring(7),
-          conferenceSolutionKey: { type: "hangoutsMeet" },
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
         },
       },
-    };
+    }
 
-    const response = await google.calendar({ version: "v3" }).events.insert({
-      calendarId: calendarId,
+    const response = await google.calendar({ version: 'v3' }).events.insert({
+      calendarId,
       requestBody: event,
-    });
+    })
 
-    const eventId = response.data.id;
+    const eventId = response.data.id
 
-    console.log(`Event created: ${eventId}`);
+    console.log(`Event created: ${eventId}`)
 
-    return eventId;
+    return eventId
   } catch (error) {
-    console.error("Error creating event:", error);
-    throw error;
+    console.error('Error creating event:', error)
+    throw error
   }
+}
+
+// Función auxiliar para generar slots para un día específico usando Luxon
+function generateSlotsForDay(
+  loopDate,
+  rangeLimit,
+  standardDuration,
+  parsedEvents
+) {
+  const daySlots = []
+  const dayOfWeek = loopDate.weekday // 1 (Mon) a 7 (Sun)
+
+  // Asumiendo que rangeLimit.days usa 1=Lunes, 5=Viernes
+  if (rangeLimit.days.includes(dayOfWeek)) {
+    for (let hour = rangeLimit.startHour; hour < rangeLimit.endHour; hour++) {
+      const slotStart = loopDate.set({
+        hour,
+        minute: 0,
+        second: 0,
+        millisecond: 0,
+      })
+      const slotEnd = slotStart.plus({ hours: standardDuration })
+
+      const isBusy = parsedEvents.some((event) => {
+        // Comparar directamente objetos DateTime de Luxon
+        return slotStart < event.endDt && slotEnd > event.startDt
+      })
+
+      if (!isBusy) {
+        // Devolver objetos Date nativos como antes para compatibilidad
+        daySlots.push({
+          start: slotStart.toJSDate(),
+          end: slotEnd.toJSDate(),
+        })
+      }
+    }
+  }
+  return daySlots
 }
 
 export async function listAvailableSlots(
   botNumber,
-  startDate = new Date(),
-  endDate
+  startDate = new Date(), // Acepta Date nativo
+  endDate // Acepta Date nativo o undefined
 ) {
   try {
-    const calendarId = await getOrCreateCalendar(botNumber);
-    const auth = await initializeAuth();
-    const authClient = await auth.getClient();
+    const calendarId = await getOrCreateCalendar(botNumber)
+    const auth = await initializeAuth()
+    const authClient = await auth.getClient()
 
-    google.options({ auth: authClient });
+    google.options({ auth: authClient })
 
+    // Definir zona horaria para Luxon
+    const luxonTimeZone = timeZone // 'America/Cancun'
+
+    // Convertir startDate a Luxon DateTime
+    const startDt = DateTime.fromJSDate(startDate).setZone(luxonTimeZone)
+
+    // Calcular endDt si no se provee, usando Luxon
+    let endDt
     if (!endDate) {
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + dateLimit);
+      endDt = startDt.plus({ days: dateLimit })
+    } else {
+      endDt = DateTime.fromJSDate(endDate).setZone(luxonTimeZone)
     }
 
-    const response = await google.calendar({ version: "v3" }).events.list({
-      calendarId: calendarId,
-      timeMin: startDate.toISOString(),
-      timeMax: endDate.toISOString(),
-      timeZone: timeZone,
+    // La API de Google sigue necesitando ISO strings
+    const timeMinIso = startDt.toISO()
+    const timeMaxIso = endDt.toISO()
+
+    const response = await google.calendar({ version: 'v3' }).events.list({
+      calendarId,
+      timeMin: timeMinIso,
+      timeMax: timeMaxIso,
+      timeZone, // Google Calendar usa IANA timeZone string
       singleEvents: true,
-      orderBy: "startTime",
-    });
+      orderBy: 'startTime',
+    })
 
-    const events = response.data.items;
+    // Convertir eventos a objetos Luxon DateTime para facilitar comparaciones
+    const events = response.data.items
+    const parsedEvents = events.map((event) => ({
+      ...event,
+      startDt: DateTime.fromISO(event.start.dateTime || event.start.date, {
+        zone: luxonTimeZone,
+      }),
+      endDt: DateTime.fromISO(event.end.dateTime || event.end.date, {
+        zone: luxonTimeZone,
+      }),
+    }))
 
-    const slots = [];
+    const allSlots = []
+    let currentDt = startDt // Iniciar iterador Luxon
 
-    let currentDate = new Date(startDate);
+    // Bucle usando Luxon DateTime
+    while (currentDt < endDt) {
+      const daySlots = generateSlotsForDay(
+        currentDt,
+        rangeLimit,
+        standardDuration,
+        parsedEvents // Pasar eventos parseados
+      )
+      allSlots.push(...daySlots)
 
-    while (currentDate < endDate) {
-      const dayOfWeek = currentDate.getDay();
-
-      if (rangeLimit.days.includes(dayOfWeek)) {
-        for (
-          let hour = rangeLimit.startHour;
-          hour < rangeLimit.endHour;
-          hour++
-        ) {
-          const slotStart = new Date(currentDate);
-
-          slotStart.setHours(hour, 0, 0, 0);
-
-          const slotEnd = new Date(slotStart);
-
-          slotEnd.setHours(hour + standardDuration);
-
-          const isBusy = events.some((event) => {
-            const eventStart = new Date(
-              event.start.dateTime || event.start.date
-            );
-
-            const eventEnd = new Date(event.end.dateTime || event.end.date);
-
-            return slotStart < eventEnd && slotEnd > eventStart;
-          });
-
-          if (!isBusy) {
-            slots.push({
-              start: slotStart,
-              end: slotEnd,
-            });
-          }
-        }
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
+      // Incrementar usando Luxon (más robusto)
+      currentDt = currentDt.plus({ days: 1 })
     }
-    return slots;
+
+    return allSlots
   } catch (error) {
-    console.error("Error listing available slots:", error);
-    throw error;
+    console.error('Error listing available slots:', error)
+    throw error
   }
 }
 
 export async function getNextAvailableSlot(date, botNumber) {
   try {
-    if (typeof date === "string") {
-      date = new Date(date);
+    if (typeof date === 'string') {
+      date = new Date(date)
     } else if (!(date instanceof Date || isNaN(date))) {
-      throw new Error("Invalid Date");
+      throw new Error('Invalid Date')
     }
 
-    const availableSlots = await listAvailableSlots(botNumber, date);
+    const availableSlots = await listAvailableSlots(botNumber, date)
 
     const filteredSlots = availableSlots.filter(
       (slot) => new Date(slot.start) > date
-    );
+    )
 
     const sortedSlots = filteredSlots.sort(
       (a, b) => new Date(a.start) - new Date(b.start)
-    );
+    )
 
-    return sortedSlots.length > 0 ? sortedSlots[0] : null;
+    return sortedSlots.length > 0 ? sortedSlots[0] : null
   } catch (error) {
-    console.error("Error getting next available slot:", error);
-    throw error;
+    console.error('Error getting next available slot:', error)
+    throw error
   }
 }
 
 export async function isDateAvailable(date, botNumber) {
   try {
-    const currentDate = new Date();
+    const currentDate = new Date()
 
-    const maxDate = new Date(date);
+    const maxDate = new Date(date)
 
-    maxDate.setDate(maxDate.getDate() + dateLimit);
+    maxDate.setDate(maxDate.getDate() + dateLimit)
 
     if (date < currentDate || date > maxDate) {
-      return false;
+      return false
     }
 
-    const dayOfWeek = date.getDay();
+    const dayOfWeek = date.getDay()
 
     if (!rangeLimit.days.includes(dayOfWeek)) {
-      return false;
+      return false
     }
 
-    const hour = date.getHours();
+    const hour = date.getHours()
 
     if (hour < rangeLimit.startHour || hour >= rangeLimit.endHour) {
-      return false;
+      return false
     }
 
-    const availableSlots = await listAvailableSlots(botNumber, currentDate);
+    const availableSlots = await listAvailableSlots(botNumber, currentDate)
 
     const slotsOnGivenDate = availableSlots.filter(
       (slot) => new Date(slot.start).toDateString() === date.toDateString()
-    );
+    )
 
     const isSlotAvailable = slotsOnGivenDate.some(
       (slot) =>
         new Date(slot.start).getTime() === date.getTime() &&
         new Date(slot.end).getTime() ===
           date.getTime() + standardDuration * 60 * 60 * 1000
-    );
+    )
 
-    return isSlotAvailable;
+    return isSlotAvailable
   } catch (error) {
-    console.error("Error checking if date is available:", error);
-    throw error;
+    console.error('Error checking if date is available:', error)
+    throw error
   }
 }

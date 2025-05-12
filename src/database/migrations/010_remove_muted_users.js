@@ -1,6 +1,6 @@
 export const up = async (db) => {
-  await db.sql`DROP TABLE IF EXISTS muted_users`;
-};
+  await db.sql`DROP TABLE IF EXISTS muted_users`
+}
 
 export const down = async (db) => {
   await db.sql`
@@ -12,5 +12,5 @@ export const down = async (db) => {
       PRIMARY KEY (phone_number, bot_number),
       FOREIGN KEY (bot_number) REFERENCES bot_numbers(phone_number)
     )
-  `;
-};
+  `
+}

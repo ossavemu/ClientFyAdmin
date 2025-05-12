@@ -6,9 +6,9 @@ export const up = async (db) => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
-  `;
-};
+  `
+}
 
 export const down = async (db) => {
-  await db.sql`DROP TABLE IF EXISTS calendar_ids`;
-};
+  await db.sql`DROP TABLE IF EXISTS calendar_ids`
+}

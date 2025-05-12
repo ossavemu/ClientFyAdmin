@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 export const wsUserSchema = z
   .object({
@@ -6,21 +6,21 @@ export const wsUserSchema = z
       .string()
       .transform((val) => {
         // Solo limpiar el número, sin agregar prefijo
-        return val.replace(/\D/g, "");
+        return val.replace(/\D/g, '')
       })
       .refine(
         (val) => val.length >= 10,
-        "El número de teléfono debe tener al menos 10 dígitos"
+        'El número de teléfono debe tener al menos 10 dígitos'
       )
       .refine(
         (val) => /^[0-9]{10,}$/.test(val),
-        "El número debe contener solo dígitos y tener al menos 10 caracteres"
+        'El número debe contener solo dígitos y tener al menos 10 caracteres'
       ),
 
     name: z
       .string()
-      .transform((val) => (val || "").trim()) // Limpiar espacios
-      .default(""), // Valor por defecto
+      .transform((val) => (val || '').trim()) // Limpiar espacios
+      .default(''), // Valor por defecto
 
     interaction_count: z.number().int().min(1).default(1),
 
@@ -30,11 +30,11 @@ export const wsUserSchema = z
   })
   .superRefine((data, ctx) => {
     // Validación cruzada después de procesar todos los campos
-    let finalName = data.name;
+    let finalName = data.name
 
     // Si el nombre es inválido, usar el phone_number
     if (finalName.length < 2) {
-      finalName = data.phone_number;
+      finalName = data.phone_number
     }
 
     // Aplicar validaciones al nombre final
@@ -42,25 +42,25 @@ export const wsUserSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.too_small,
         minimum: 2,
-        type: "string",
+        type: 'string',
         inclusive: true,
-        message: "El nombre debe tener al menos 2 caracteres",
-      });
+        message: 'El nombre debe tener al menos 2 caracteres',
+      })
     }
 
     if (finalName.length > 100) {
       ctx.addIssue({
         code: z.ZodIssueCode.too_big,
         maximum: 100,
-        type: "string",
+        type: 'string',
         inclusive: true,
-        message: "El nombre no puede exceder 100 caracteres",
-      });
+        message: 'El nombre no puede exceder 100 caracteres',
+      })
     }
 
     // Devolver los datos modificados
-    return { ...data, name: finalName };
-  });
+    return { ...data, name: finalName }
+  })
 
 export const historicSchema = z
   .object({
@@ -72,12 +72,12 @@ export const historicSchema = z
   })
   .transform((data) => {
     // Si el provider no es "user", bot_number es requerido
-    if (data.provider !== "user" && !data.bot_number) {
-      throw new Error("bot_number es requerido cuando provider no es 'user'");
+    if (data.provider !== 'user' && !data.bot_number) {
+      throw new Error("bot_number es requerido cuando provider no es 'user'")
     }
     // Si es un mensaje de usuario, usar el número del bot actual
-    if (data.provider === "user" && !data.bot_number) {
-      data.bot_number = process.env.P_NUMBER;
+    if (data.provider === 'user' && !data.bot_number) {
+      data.bot_number = process.env.P_NUMBER
     }
-    return data;
-  });
+    return data
+  })

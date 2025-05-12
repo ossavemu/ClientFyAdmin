@@ -2,7 +2,7 @@ export const config = {
   // Base
   defaultPrompt: (userName) => `
     Eres un profesional de ventas experimentado. Tu objetivo es ayudar a ${
-      userName || "nuestro cliente"
+      userName || 'nuestro cliente'
     } 
     a encontrar los productos o servicios perfectos para sus necesidades.
 
@@ -42,7 +42,7 @@ export const config = {
   jwtToken: process.env.jwtToken,
   numberId: process.env.numberId,
   verifyToken: process.env.verifyToken,
-  version: "v20.0",
+  version: 'v20.0',
   // OpenAI
   openai_apikey: process.env.OPENAI_API_KEY,
   model: process.env.model,
@@ -58,19 +58,19 @@ export const config = {
   images_api_url: process.env.IMAGES_API_URL,
   training_files_url: process.env.TRAINING_FILES_URL,
   // Características configurables
-  enableVirtualAppointments: process.env.ENABLE_VIRTUAL_APPOINTMENTS === "true",
+  enableVirtualAppointments: process.env.ENABLE_VIRTUAL_APPOINTMENTS === 'true',
   enableInPersonAppointments:
-    process.env.ENABLE_IN_PERSON_APPOINTMENTS === "true",
-  enableAutoInvite: process.env.ENABLE_AUTO_INVITE === "true",
-  company_name: process.env.COMPANY_NAME || "Clínica Dental",
-  company_address: process.env.COMPANY_ADDRESS || "Dirección no especificada",
+    process.env.ENABLE_IN_PERSON_APPOINTMENTS === 'true',
+  enableAutoInvite: process.env.ENABLE_AUTO_INVITE === 'true',
+  company_name: process.env.COMPANY_NAME || 'Clínica Dental',
+  company_address: process.env.COMPANY_ADDRESS || 'Dirección no especificada',
   // Turso config
   TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL,
   TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN,
 
   // Agregar configuración base para calendarios
   calendar: {
-    timeZone: "America/Cancun",
+    timeZone: 'America/Cancun',
     rangeLimit: {
       days: [1, 2, 3, 4, 5], // Lunes a Viernes
       startHour: 9,
@@ -81,16 +81,16 @@ export const config = {
   },
 
   // Validar que P_NUMBER esté presente
-  validateConfig() {
+  validateConfig () {
     if (!this.P_NUMBER) {
-      throw new Error("P_NUMBER es requerido en las variables de ambiente");
+      throw new Error('P_NUMBER es requerido en las variables de ambiente')
     }
     // Solo validar que sea un número válido
     if (!this.P_NUMBER.match(/^\d+$/)) {
-      throw new Error(`P_NUMBER debe ser un número válido: ${this.P_NUMBER}`);
+      throw new Error(`P_NUMBER debe ser un número válido: ${this.P_NUMBER}`)
     }
   },
-};
+}
 
 // Ejecutar validación al importar
-config.validateConfig();
+config.validateConfig()

@@ -7,7 +7,7 @@ export const up = async (db) => {
       provider TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-  `;
+  `
 
   await db.sql`
     CREATE TABLE IF NOT EXISTS ws_users (
@@ -18,7 +18,7 @@ export const up = async (db) => {
       last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-  `;
+  `
 
   await db.sql`
     CREATE TABLE IF NOT EXISTS historic (
@@ -32,36 +32,36 @@ export const up = async (db) => {
       FOREIGN KEY (phone_number) REFERENCES ws_users(phone_number),
       FOREIGN KEY (bot_number) REFERENCES bot_numbers(phone_number)
     )
-  `;
+  `
 
   // Crear índices para mejorar el rendimiento
-  await db.sql`CREATE INDEX IF NOT EXISTS idx_historic_phone ON historic(phone_number)`;
-  await db.sql`CREATE INDEX IF NOT EXISTS idx_historic_bot ON historic(bot_number)`;
-};
+  await db.sql`CREATE INDEX IF NOT EXISTS idx_historic_phone ON historic(phone_number)`
+  await db.sql`CREATE INDEX IF NOT EXISTS idx_historic_bot ON historic(bot_number)`
+}
 
 export const down = async (db) => {
   // Verificar y eliminar tablas en orden (primero las que tienen referencias)
-  const tables = ["historic", "ws_users", "bot_numbers"];
+  const tables = ['historic', 'ws_users', 'bot_numbers']
 
   for (const table of tables) {
     const exists = await db.sql`
       SELECT name FROM sqlite_master 
       WHERE type='table' AND name=${table}
-    `;
+    `
 
     if (exists.length > 0) {
       // Construir la consulta como string
       switch (table) {
-        case "historic":
-          await db.sql`DROP TABLE IF EXISTS historic`;
-          break;
-        case "ws_users":
-          await db.sql`DROP TABLE IF EXISTS ws_users`;
-          break;
-        case "bot_numbers":
-          await db.sql`DROP TABLE IF EXISTS bot_numbers`;
-          break;
+        case 'historic':
+          await db.sql`DROP TABLE IF EXISTS historic`
+          break
+        case 'ws_users':
+          await db.sql`DROP TABLE IF EXISTS ws_users`
+          break
+        case 'bot_numbers':
+          await db.sql`DROP TABLE IF EXISTS bot_numbers`
+          break
       }
     }
   }
-};
+}

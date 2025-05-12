@@ -1,6 +1,6 @@
-import { db } from "../connection.js";
+import { db } from '../connection.js'
 
-export async function up() {
+export async function up () {
   try {
     // Crear tabla de agenda
     await db.sql`
@@ -18,18 +18,18 @@ export async function up() {
           REFERENCES ws_users(phone_number) 
           ON DELETE CASCADE
       )
-    `;
+    `
 
     // Crear índices para mejorar el rendimiento
     await db.sql`
       CREATE INDEX IF NOT EXISTS idx_agenda_phone_number 
       ON agenda(phone_number)
-    `;
+    `
 
     await db.sql`
       CREATE INDEX IF NOT EXISTS idx_agenda_scheduled_at 
       ON agenda(scheduled_at)
-    `;
+    `
 
     // Crear vista para próximas citas (próximas 24 horas)
     await db.sql`
@@ -43,12 +43,12 @@ export async function up() {
         AND datetime('now', '+24 hours')
       AND a.status = 'scheduled'
       ORDER BY a.scheduled_at ASC
-    `;
+    `
 
-    console.log("Agenda table migration completed successfully");
+    console.log('Agenda table migration completed successfully')
   } catch (error) {
-    console.error("Agenda table migration failed:", error);
-    throw error;
+    console.error('Agenda table migration failed:', error)
+    throw error
   }
 }
 
@@ -56,9 +56,9 @@ export const down = async (db) => {
   const exists = await db.sql`
     SELECT name FROM sqlite_master 
     WHERE type='table' AND name='agenda'
-  `;
+  `
 
   if (exists.length > 0) {
-    await db.sql`DROP TABLE IF EXISTS agenda`;
+    await db.sql`DROP TABLE IF EXISTS agenda`
   }
-};
+}

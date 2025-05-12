@@ -1,9 +1,9 @@
-import { db } from "../connection.js";
+import { db } from '../connection.js'
 
-export async function up() {
+export async function up () {
   try {
     // Eliminar la tabla anterior
-    await db.sql`DROP TABLE IF EXISTS user_assistants`;
+    await db.sql`DROP TABLE IF EXISTS user_assistants`
 
     // Crear tabla de bots
     await db.sql`
@@ -15,7 +15,7 @@ export async function up() {
           REFERENCES ws_users(phone_number) 
           ON DELETE CASCADE
       )
-    `;
+    `
 
     // Crear tabla de asistentes vinculados a bots
     await db.sql`
@@ -30,18 +30,18 @@ export async function up() {
           ON DELETE CASCADE,
         UNIQUE(bot_number, assistant_id)
       )
-    `;
+    `
 
     // Crear índices
     await db.sql`
       CREATE INDEX IF NOT EXISTS idx_bot_assistants_bot_number 
       ON bot_assistants(bot_number)
-    `;
+    `
 
     await db.sql`
       CREATE INDEX IF NOT EXISTS idx_bot_assistants_assistant_id 
       ON bot_assistants(assistant_id)
-    `;
+    `
 
     // Insertar bots predeterminados
     await db.sql`
@@ -50,12 +50,12 @@ export async function up() {
         ('000000000000', 'meta'),
         ('bot_baileys', 'baileys')
       ON CONFLICT (phone_number) DO NOTHING
-    `;
+    `
 
-    console.log("Bot assistants tables migration completed successfully");
+    console.log('Bot assistants tables migration completed successfully')
   } catch (error) {
-    console.error("Bot assistants tables migration failed:", error);
-    throw error;
+    console.error('Bot assistants tables migration failed:', error)
+    throw error
   }
 }
 
@@ -63,9 +63,9 @@ export const down = async (db) => {
   const exists = await db.sql`
     SELECT name FROM sqlite_master 
     WHERE type='table' AND name='bot_assistants'
-  `;
+  `
 
   if (exists.length > 0) {
-    await db.sql`DROP TABLE IF EXISTS bot_assistants`;
+    await db.sql`DROP TABLE IF EXISTS bot_assistants`
   }
-};
+}

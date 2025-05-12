@@ -1,6 +1,6 @@
-import { db } from "../connection.js";
+import { db } from '../connection.js'
 
-export async function up() {
+export async function up () {
   try {
     await db.sql`
       CREATE TABLE IF NOT EXISTS user_assistants (
@@ -13,17 +13,17 @@ export async function up() {
           REFERENCES ws_users(phone_number) 
           ON DELETE CASCADE
       )
-    `;
+    `
 
     await db.sql`
       CREATE INDEX IF NOT EXISTS idx_user_assistants_assistant_id 
       ON user_assistants(assistant_id)
-    `;
+    `
 
-    console.log("Assistants table migration completed successfully");
+    console.log('Assistants table migration completed successfully')
   } catch (error) {
-    console.error("Assistants table migration failed:", error);
-    throw error;
+    console.error('Assistants table migration failed:', error)
+    throw error
   }
 }
 
@@ -31,9 +31,9 @@ export const down = async (db) => {
   const exists = await db.sql`
     SELECT name FROM sqlite_master 
     WHERE type='table' AND name='bot_assistants'
-  `;
+  `
 
   if (exists.length > 0) {
-    await db.sql`DROP TABLE IF EXISTS bot_assistants`;
+    await db.sql`DROP TABLE IF EXISTS bot_assistants`
   }
-};
+}

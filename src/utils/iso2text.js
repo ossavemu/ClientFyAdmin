@@ -1,10 +1,10 @@
-import { DateTime } from 'luxon';
+import { DateTime } from 'luxon'
 
 export const iso2text = (isoDate) => {
   try {
     const dateTime = DateTime.fromISO(isoDate, { zone: 'utc' }).setZone(
       'America/Bogota'
-    );
+    )
 
     const formattedDate = dateTime.toLocaleString({
       weekday: 'long',
@@ -14,10 +14,10 @@ export const iso2text = (isoDate) => {
       minute: '2-digit',
       hour12: false,
       timeZoneName: 'short',
-    });
-    return formattedDate;
+    })
+    return formattedDate
   } catch (error) {
-    console.error('Error when converting ISO date to text:', error);
-    return 'Invalid date format';
+    console.error('Error when converting ISO date to text:', error)
+    return 'Invalid date format'
   }
-};
+}

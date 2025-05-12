@@ -40,4 +40,4 @@ Cuando un usuario solicite una demo o simulación:
 
 INSTRUCCIÓN PARA LA IA:
 Genera un texto persuasivo en español para ClientFy, destacando sus funciones, beneficios y precio ($50 USD/mes). Cuando el usuario solicite una demo, NO redirijas a la página web. En su lugar, comienza recopilando la información de la empresa y simula una interacción real. Usa un tono profesional pero cercano, sin formato Markdown.
-`;
+`

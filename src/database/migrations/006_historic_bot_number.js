@@ -1,9 +1,9 @@
 export const up = async (db) => {
   // Primero respaldamos los datos existentes
-  await db.sql`CREATE TABLE historic_backup AS SELECT * FROM historic`;
+  await db.sql`CREATE TABLE historic_backup AS SELECT * FROM historic`
 
   // Eliminamos la tabla original
-  await db.sql`DROP TABLE historic`;
+  await db.sql`DROP TABLE historic`
 
   // Creamos la nueva tabla con la columna bot_number
   await db.sql`
@@ -18,7 +18,7 @@ export const up = async (db) => {
       FOREIGN KEY (phone_number) REFERENCES ws_users(phone_number),
       FOREIGN KEY (bot_number) REFERENCES bot_numbers(phone_number)
     )
-  `;
+  `
 
   // Restauramos los datos, asignando un valor por defecto para bot_number
   await db.sql`
@@ -34,22 +34,22 @@ export const up = async (db) => {
       provider,
       created_at
     FROM historic_backup
-  `;
+  `
 
   // Eliminamos la tabla de respaldo
-  await db.sql`DROP TABLE historic_backup`;
-};
+  await db.sql`DROP TABLE historic_backup`
+}
 
 export const down = async (db) => {
   // Verificar si la tabla historic existe
   const tableExists = await db.sql`
     SELECT name FROM sqlite_master 
     WHERE type='table' AND name='historic'
-  `;
+  `
 
   if (tableExists.length > 0) {
     // Solo intentar borrar si la tabla existe
-    await db.sql`DELETE FROM historic`;
-    await db.sql`DROP TABLE historic`;
+    await db.sql`DELETE FROM historic`
+    await db.sql`DROP TABLE historic`
   }
-};
+}

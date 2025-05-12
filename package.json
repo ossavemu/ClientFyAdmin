@@ -4,11 +4,10 @@
   "version": "0.0.1",
   "scripts": {
     "lint": "eslint . --no-ignore",
-    "dev": "bun lint && bun --watch ./src/app.js",
-    "migrate": "bun run src/database/migrations/runMigrations.js up",
-    "start": "bun run src/app.js",
-    "setup": "chmod +x setup.sh start.sh stop.sh && ./setup.sh",
-    "start:prod": "./stop.sh && ./start.sh"
+    "dev": "npm run lint && node --watch --env-file=.env ./src/app.js",
+    "migrate": "node run src/database/migrations/runMigrations.js up",
+    "start": "node --env-file=.env run src/app.js",
+    "start:prod": "chmod +x ./stop.sh ./start.sh && ./stop.sh && ./start.sh"
   },
   "dependencies": {
     "@adiwajshing/baileys": "5.0.0",
@@ -37,9 +36,7 @@
   "devDependencies": {
     "eslint": "^9.15.0",
     "eslint-plugin-builderbot": "latest",
-    "eslint-plugin-jsx-a11y": "^6.10.2"
-  },
-  "trustedDependencies": [
-    "protobufjs"
-  ]
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "neostandard": "^0.12.1"
+  }
 }

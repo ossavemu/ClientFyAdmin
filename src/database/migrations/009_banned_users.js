@@ -8,9 +8,9 @@ export const up = async (db) => {
       PRIMARY KEY (phone_number, bot_number),
       FOREIGN KEY (bot_number) REFERENCES bot_numbers(phone_number)
     )
-  `;
-};
+  `
+}
 
 export const down = async (db) => {
-  await db.sql`DROP TABLE IF EXISTS banned_users`;
-};
+  await db.sql`DROP TABLE IF EXISTS banned_users`
+}
