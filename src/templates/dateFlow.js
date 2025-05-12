@@ -174,7 +174,7 @@ export const confirmationFlow = addKeyword(EVENTS.ACTION).addAnswer(
         'cancelo',
       ]
 
-      const messageText = await processVoiceOrText(ctx)
+      const messageText = await processVoiceOrText(ctxFn.provider, ctx)
       console.log('Mensaje recibido en confirmación:', messageText)
 
       const normalizedText = String(messageText)
@@ -318,14 +318,14 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
         return ctxFn.fallBack()
       }
 
-      const dateAvailable = await isDateAvailable(startDate, botNumber)
+      const dateAvailable = await isDateAvailable(solicitedDate, botNumber)
 
       console.log('Fecha disponible:', dateAvailable)
 
       // Rest of the logic for handling available/unavailable dates...
       if (dateAvailable === false) {
         const nextDateAvailable = await getNextAvailableSlot(
-          startDate,
+          solicitedDate,
           botNumber
         )
 
@@ -368,7 +368,7 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
           messages
         )
         await ctxFn.flowDynamic(response)
-        await ctxFn.state.update({ date: startDate })
+        await ctxFn.state.update({ date: solicitedDate })
         await typing(1, { ctx, ctxFn })
         return ctxFn.gotoFlow(confirmationFlow)
       }
