@@ -37,10 +37,18 @@ export const generalConfirmationFlow = addKeyword(EVENTS.ACTION).addAnswer(
         'cancelo',
       ]
 
-      const messageText = await processVoiceOrText(ctx)
-      logger.info('Mensaje recibido en confirmación general:', messageText)
+      const messageText = await processVoiceOrText(ctxFn.provider, ctx)
+      logger.info('Mensaje procesado en confirmación general:', messageText)
 
-      const normalizedText = String(messageText)
+      if (typeof messageText !== 'string' || !messageText.trim()) {
+        await typing(1, { ctx, ctxFn })
+        await ctxFn.flowDynamic(
+          'Hubo un problema procesando tu respuesta. Por favor, responde solo con "si" o "no"'
+        )
+        return ctxFn.fallBack()
+      }
+
+      const normalizedText = messageText
         .toLowerCase()
         .trim()
         .normalize('NFD')
@@ -96,7 +104,7 @@ export const generalConfirmationFlow = addKeyword(EVENTS.ACTION).addAnswer(
 )
 
 // Función para procesar solicitud de imágenes
-async function processImagesRequest (phoneNumber, ctx, ctxFn) {
+async function processImagesRequest(phoneNumber, ctx, ctxFn) {
   try {
     const images = await imageService.getImages(phoneNumber)
 
@@ -136,7 +144,7 @@ async function processImagesRequest (phoneNumber, ctx, ctxFn) {
 }
 
 // Función para procesar solicitud de documentos
-async function processDocumentsRequest (phoneNumber, ctx, ctxFn) {
+async function processDocumentsRequest(phoneNumber, ctx, ctxFn) {
   try {
     const files = await trainingService.getTrainingFiles(phoneNumber)
 
