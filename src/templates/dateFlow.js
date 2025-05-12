@@ -285,9 +285,19 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
 
       if (solicitedDate === "false" || !solicitedDate) {
         await typing(1, { ctx, ctxFn });
-        return ctxFn.endFlow(
-          "No pude entender la fecha solicitada, vuelve a intentarlo!"
-        );
+        const normalizedExit = messageText
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .trim();
+        if (normalizedExit === "salir") {
+          return ctxFn.endFlow("Ok, cancelando la agenda. ¡Hasta luego!");
+        } else {
+          await ctxFn.flowDynamic(
+            "No pude entender la fecha solicitada. Por favor, intenta de nuevo o escribe 'salir' para terminar de agendar."
+          );
+          return ctxFn.fallBack();
+        }
       }
 
       const startDate = new Date(solicitedDate);
