@@ -357,20 +357,43 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
         await typing(1, { ctx, ctxFn })
         return ctxFn.gotoFlow(confirmationFlow)
       } else {
-        const messages = [{ role: 'user', content: messageText }]
-        const response = await simpleChat(
-          promptBase +
-            '\\nHoy es el día:\\n' + // Escaped newline
-            currentDate +
-            '\\nLa fecha solicitada es:\\n' + // Escaped newline
-            solicitedDate +
-            '\\nLa disponibilidad de esa fecha es: true\\n', // Escaped newline
-          messages
+        // Fecha SÍ disponible: Construir mensaje de confirmación directamente
+        const dateToConfirm = new Date(solicitedDate)
+
+        // Obtener la hora en la zona horaria de Bogotá para el cálculo de am/pm
+        const bogotaHourOptions = {
+          hour: 'numeric',
+          timeZone: 'America/Bogota',
+          hour12: false,
+        }
+        let hoursInBogota = parseInt(
+          new Intl.DateTimeFormat('es-ES', bogotaHourOptions).format(
+            dateToConfirm
+          )
         )
-        await ctxFn.flowDynamic(response)
-        await ctxFn.state.update({ date: solicitedDate })
+
+        const ampm = hoursInBogota >= 12 ? 'de la tarde' : 'de la mañana'
+        let displayHours = hoursInBogota % 12
+        displayHours = displayHours || 12 // la hora '0' o '12' debe ser '12'
+
+        // Formatear la parte de la fecha (día, DD de mes de AAAA)
+        const datePartOptions = {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          timeZone: 'America/Bogota', // Asegurar consistencia de zona horaria
+        }
+        const datePart = dateToConfirm.toLocaleString('es-ES', datePartOptions)
+
+        const formattedDateString = `${datePart} a las ${displayHours} ${ampm}`
+
+        const confirmationMsg = `La fecha solicitada está disponible. El turno sería el ${formattedDateString}.`
+
+        await ctxFn.flowDynamic(confirmationMsg) // Enviar mensaje directo
+        await ctxFn.state.update({ date: solicitedDate }) // Guardar fecha en estado
         await typing(1, { ctx, ctxFn })
-        return ctxFn.gotoFlow(confirmationFlow)
+        return ctxFn.gotoFlow(confirmationFlow) // Ir a la confirmación si/no
       }
     }
   )

@@ -10,7 +10,7 @@ export const formFlow = addKeyword(EVENTS.ACTION)
     { capture: true },
     async (ctx, ctxFn) => {
       try {
-        const name = await processVoiceOrText(ctx)
+        const name = await processVoiceOrText(ctxFn.provider, ctx)
         await ctxFn.state.update({ name })
         await typing(1, { ctx, ctxFn })
       } catch (error) {

@@ -13,7 +13,6 @@ export const eventCreationFlow = addKeyword(EVENTS.ACTION).addAnswer(
     try {
       const userInfo = await ctxFn.state.getMyState()
       const botNumber = process.env.P_NUMBER
-      console.log('Estado actual:', userInfo)
 
       const name = userInfo.name
       const clientEmail = userInfo.email
