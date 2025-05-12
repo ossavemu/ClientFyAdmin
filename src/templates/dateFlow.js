@@ -252,6 +252,8 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
     { capture: true },
     async (ctx, ctxFn) => {
       const botNumber = process.env.P_NUMBER
+      const currentState = ctxFn.state.getMyState() || {}
+      const partialDateInfo = currentState.partialDateInfo
       const currentDate = new Date()
       currentDate.setHours(currentDate.getHours() + 1)
       currentDate.setMinutes(0, 0, 0)
@@ -259,6 +261,7 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
       // Use ctx directly as processVoiceOrText expects the full context object
       const messageText = await processVoiceOrText(ctxFn.provider, ctx)
       console.log('Mensaje procesado:', messageText) // Log after processing
+      console.log('Estado actual:', currentState)
 
       // Ensure messageText is a string before normalization
       const normalizedText = String(messageText || '')
@@ -270,6 +273,7 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
       // Check for "salir" command first
       if (normalizedText === 'salir') {
         await typing(1, { ctx, ctxFn })
+        await ctxFn.state.update({ partialDateInfo: null }) // Clear state on exit
         return ctxFn.endFlow(
           'Entendido. Si deseas intentar agendar de nuevo, solo tienes que pedirlo. ¿Hay algo más en lo que pueda ayudarte?'
         )
@@ -281,13 +285,15 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
         await ctxFn.flowDynamic(
           "Hubo un problema procesando tu mensaje. Por favor, intenta de nuevo o escribe 'salir' para terminar."
         )
-        return ctxFn.fallBack()
+        return ctxFn.fallBack() // Stay in the same step
       }
 
-      // Proceed with date/option detection only if not "salir" and message is not empty
       let solicitedDate
       let selectedSlot
 
+      // --- Inicio: Lógica mejorada para fecha/hora ---
+
+      // 1. Intentar obtener opción numérica
       const selectedOption = getOptionFromText(messageText) // Use original messageText here
       console.log('Opción detectada:', selectedOption)
 
@@ -297,26 +303,113 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
           selectedSlot = availableSlots[selectedOption - 1]
           if (selectedSlot) {
             solicitedDate = selectedSlot.start
+            console.log('Fecha seleccionada por opción:', solicitedDate)
+            await ctxFn.state.update({ partialDateInfo: null }) // Clear partial info if option is chosen
+          } else {
+            await typing(1, { ctx, ctxFn })
+            await ctxFn.flowDynamic(
+              'La opción seleccionada no es válida. Por favor, elige un número de la lista o especifica una fecha y hora.'
+            )
+            return ctxFn.fallBack()
           }
         } catch (error) {
-          console.error('Error al obtener slot seleccionado:', error)
+          console.error('Error al obtener slot por opción:', error)
+          await typing(1, { ctx, ctxFn })
+          await ctxFn.flowDynamic(
+            'Hubo un problema al procesar la opción seleccionada. Intenta especificar la fecha y hora directamente.'
+          )
+          return ctxFn.fallBack()
         }
       }
 
-      // If no valid option selected, try parsing the date from text
+      // 2. Si no es opción, intentar parsear fecha/hora completa del mensaje actual
       if (!solicitedDate) {
-        solicitedDate = await text2iso(messageText) // Use original messageText
+        const parsedFullDate = await text2iso(messageText)
+        if (parsedFullDate && parsedFullDate !== 'false') {
+          solicitedDate = parsedFullDate
+          console.log(
+            'Fecha completa parseada del mensaje actual:',
+            solicitedDate
+          )
+          await ctxFn.state.update({ partialDateInfo: null }) // Clear partial info
+        }
       }
 
-      // Check if date parsing failed or option wasn't valid
-      if (solicitedDate === 'false' || !solicitedDate) {
-        await typing(1, { ctx, ctxFn })
-        // No need to check for "salir" again here
-        await ctxFn.flowDynamic(
-          "No pude entender la fecha solicitada. Por favor, intenta de nuevo o escribe 'salir' para terminar de agendar."
+      // 3. Si no hay fecha completa aún y hay información parcial guardada (fecha)
+      //    e intentar parsear solo la hora del mensaje actual
+      if (!solicitedDate && partialDateInfo && partialDateInfo.date) {
+        // Intenta combinar la fecha guardada con la hora del mensaje actual
+        // NOTA: text2iso podría necesitar ser más inteligente o necesitar una función helper
+        // para combinar una fecha base con una hora relativa.
+        // Por ahora, intentaremos pasar la fecha base como contexto a text2iso.
+        console.log(
+          `Intentando combinar fecha guardada ${partialDateInfo.date} con hora ${messageText}`
         )
-        return ctxFn.fallBack()
+        const combinedDate = await text2iso(
+          `${partialDateInfo.date} ${messageText}`
+        ) // Intento simple de combinar
+
+        if (combinedDate && combinedDate !== 'false') {
+          solicitedDate = combinedDate
+          console.log(
+            'Fecha combinada (estado + mensaje actual):',
+            solicitedDate
+          )
+          await ctxFn.state.update({ partialDateInfo: null }) // Clear partial info
+        } else {
+          console.log('No se pudo combinar fecha guardada con hora actual.')
+          // Podríamos añadir lógica para detectar explícitamente si el mensaje SÓLO contiene una hora
+          // usando regex, pero por simplicidad, si la combinación falla, pedimos de nuevo.
+        }
       }
+
+      // 4. Si aún no hay fecha completa, intentar parsear solo la fecha del mensaje actual
+      if (!solicitedDate) {
+        // Necesitamos una forma de saber si text2iso puede detectar *solo* una fecha.
+        // Asumamos que si text2iso(messageText + " 12:00") funciona pero text2iso(messageText) no,
+        // es probablemente solo una fecha. Esto es una heurística y puede fallar.
+        // Una mejor solución sería una función parseDatePart(text).
+        const potentialDate = await text2iso(`${messageText} 12:00`) // Heurística: Añadir hora neutra
+        if (potentialDate && potentialDate !== 'false') {
+          // Verificamos que no sea igual al intento original por si acaso
+          const originalAttempt = await text2iso(messageText)
+          if (!originalAttempt || originalAttempt === 'false') {
+            console.log(
+              `Mensaje parece ser solo una fecha: ${messageText}. Guardando en estado.`
+            )
+            // Extraer solo la parte YYYY-MM-DD
+            const datePart = potentialDate.split('T')[0]
+            await ctxFn.state.update({ partialDateInfo: { date: datePart } })
+            await typing(1, { ctx, ctxFn })
+            await ctxFn.flowDynamic(
+              'Entendido, ¿a qué hora quieres la reserva?'
+            )
+            return ctxFn.fallBack() // Esperar la hora
+          }
+        }
+      }
+
+      // 5. Si después de todo esto, no tenemos fecha completa, fallamos.
+      if (!solicitedDate || solicitedDate === 'false') {
+        await typing(1, { ctx, ctxFn })
+        // Si había info parcial, indicamos que falta la otra parte.
+        if (partialDateInfo && partialDateInfo.date) {
+          await ctxFn.flowDynamic(
+            'No entendí la hora. Por favor, indica la hora para el día ' +
+              partialDateInfo.date +
+              ' o escribe "salir".'
+          )
+        } else {
+          await ctxFn.flowDynamic(
+            "No pude entender la fecha solicitada. Por favor, intenta de nuevo especificando día y hora (ej. 'mañana a las 3pm') o elige una opción de la lista, o escribe 'salir'."
+          )
+        }
+        return ctxFn.fallBack() // Pedir de nuevo
+      }
+
+      // --- Fin: Lógica mejorada ---
+
+      console.log('Fecha solicitada final para verificar:', solicitedDate)
 
       const dateAvailable = await isDateAvailable(solicitedDate, botNumber)
 
@@ -330,6 +423,7 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
         )
 
         if (!nextDateAvailable) {
+          await ctxFn.state.update({ partialDateInfo: null }) // Clear state
           return ctxFn.endFlow(
             'No hay fechas disponibles próximas. Por favor, intenta con otra fecha.'
           )
@@ -353,11 +447,16 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
           messages
         )
         await ctxFn.flowDynamic(response)
-        await ctxFn.state.update({ date: nextDateAvailable.start })
+        await ctxFn.state.update({
+          date: nextDateAvailable.start,
+          partialDateInfo: null,
+        })
         await typing(1, { ctx, ctxFn })
         return ctxFn.gotoFlow(confirmationFlow)
       } else {
         // Fecha SÍ disponible: Construir mensaje de confirmación directamente
+        await ctxFn.state.update({ date: solicitedDate, partialDateInfo: null }) // Guardar fecha final y limpiar parcial
+
         const dateToConfirm = new Date(solicitedDate)
 
         // Obtener la hora en la zona horaria de Bogotá para el cálculo de am/pm
@@ -391,7 +490,6 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
         const confirmationMsg = `La fecha solicitada está disponible. El turno sería el ${formattedDateString}.`
 
         await ctxFn.flowDynamic(confirmationMsg) // Enviar mensaje directo
-        await ctxFn.state.update({ date: solicitedDate }) // Guardar fecha en estado
         await typing(1, { ctx, ctxFn })
         return ctxFn.gotoFlow(confirmationFlow) // Ir a la confirmación si/no
       }
