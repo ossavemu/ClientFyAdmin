@@ -366,7 +366,7 @@ export const dateFlow = addKeyword(EVENTS.ACTION)
           timeZone: 'America/Bogota',
           hour12: false,
         }
-        let hoursInBogota = parseInt(
+        const hoursInBogota = parseInt(
           new Intl.DateTimeFormat('es-ES', bogotaHourOptions).format(
             dateToConfirm
           )
